@@ -1,142 +1,212 @@
-#include <Arduino.h>
+/*
+  The TFT_eSPI library incorporates an Adafruit_GFX compatible
+  button handling class.
 
+  This example displays a column of buttons with varying label
+  alignments.
 
-// Buttons (5-way joystick)
+  The sketch has been tested on the ESP32 (which supports SPIFFS)
+
+  Adjust the definitions below according to your screen size
+*/
+
+#include "FS.h"
+
+#include <SPI.h>
+
+#include <TFT_eSPI.h>
+
 #include <debounce.h>
 static void buttonHandler(uint8_t, uint8_t);
-static void handlerC(uint8_t, uint8_t);
-static void pollButtons();
-#define JOY_U 0
-#define JOY_D 14
-#define JOY_L 12
-#define JOY_R 13
-#define JOY_C 2
-static Button buttonU(JOY_U, buttonHandler);    //button id doesn't have to be pin, but ensures uniqueness and simplifies use
-static Button buttonD(JOY_D, buttonHandler);
-static Button buttonL(JOY_L, buttonHandler);
-static Button buttonR(JOY_R, buttonHandler);
-static Button buttonC(JOY_C, handlerC);
+static Button touch(0, buttonHandler);
 
-// Stepper (TMC2208)
-#define DIR_PIN   15     // Direction
-#define STEP_PIN  16     // Step
-#define ENDWARD true
-#define MOTORWARD false
-#define STEPS_PER_MM 320  // with m12 on 00, it's 160 steps per 0.5 mm, 320 steps per 1 mm, or 32 steps per 0.1 mm = 1 dmm
-bool direction = ENDWARD;
-bool shouldStep = false;
-void doStep();
 
-// Medicine
-void setupDosage(int);
-#define MAX_SYRINGE 21   // one larger than max syringe size in mL
-//                          0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19  20          Syringe total mL
-const float mm_per_mL[21]={ 0, 0, 0,16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+TFT_eSPI tft = TFT_eSPI();
 
-void setupDosage(int syringeSize) {
-  int steps_per_mL = STEPS_PER_MM * mm_per_mL[syringeSize];
-  float bolusDose_mL = 1.1;
-  float bolusSteps = bolusDose_mL * steps_per_mL;
-  int bolusTime_sec = 45;
-  int bolusDelay_us = bolusTime_sec * 5e5 / bolusSteps;    // 2 delays per step, so seconds * 1e6 / 2 = seconds * 5e5     THIS IS ASSUMING VARIABLE DELAYS IN 2 PART
-  // bolusDelay_us is on the order of 4000, ie 4ms, so we should probably do a 'nextStepTime' in micros that we schedule and check against
-  // largest value you can use with delayMicroseconds is 16383
-  // and of course we will be fighting other execution times like drawing the screen :(
-  // might need https://github.com/DrDiettrich/ALib0/blob/master/examples/MultipleTasks/MultipleTasks.ino or something like it to deal with the problem
-  // or might need to calculate moment of go, keep it stored, count steps, and calculate current next step time so we can take more than one step in a row to 'catch up'
-  // like `while (micros() > curStep * bolusDelay_us + start_us) {step(); curStep++;} and do FIXED NOT VARIABLE 40us between the two step pieces
+// This is the file name used to store the calibration data
+// You can change this to create new calibration files.
+// The SPIFFS file name must start with "/".
+#define CALIBRATION_FILE "/TouchCalData2"
 
+// Set REPEAT_CAL to true instead of false to run calibration
+// again, otherwise it will only be done once.
+// Repeat calibration if you change the screen rotation.
+#define REPEAT_CAL false
+
+// Keypad start position, key sizes and spacing
+#define KEY_X 160 // Centre of key
+#define KEY_Y 50
+#define KEY_W 320 // Width and height
+#define KEY_H 22
+#define KEY_SPACING_X 0 // X and Y gap
+#define KEY_SPACING_Y 1
+#define KEY_TEXTSIZE 1   // Font size multiplier
+#define BUTTON_X_DELTA 22
+#define NUM_KEYS 6
+
+TFT_eSPI_Button key[NUM_KEYS];
+static uint16_t t_x = 0, t_y = 0; // To store the touch coordinates
+
+
+
+void drawButtons()
+{
+  // Generate buttons with different size X deltas
+  for (int i = 0; i < NUM_KEYS; i++)
+  {
+    key[i].initButton(&tft,
+                      KEY_X + 0 * (KEY_W + KEY_SPACING_X),
+                      KEY_Y + i * (KEY_H + KEY_SPACING_Y), // x, y, w, h, outline, fill, text
+                      KEY_W,
+                      KEY_H,
+                      TFT_BLACK, // Outline
+                      TFT_CYAN, // Fill
+                      TFT_BLACK, // Text
+                      "", // 10 Byte Label
+                      KEY_TEXTSIZE);
+
+    // Adjust button label X delta according to array position
+    // setLabelDatum(uint16_t x_delta, uint16_t y_delta, uint8_t datum)
+    key[i].setLabelDatum(i * 10 - (KEY_W/2), 0, ML_DATUM);
+
+    // Draw button and specify label string
+    // Specifying label string here will allow more than the default 10 byte label
+    key[i].drawButton(false, "ML_DATUM + " + (String)(i * 10) + "px");
+  }
 }
 
-void setup() {
-  Serial.begin(115200);
-  pinMode(JOY_U, INPUT_PULLUP);
-  pinMode(JOY_D, INPUT_PULLUP);
-  pinMode(JOY_L, INPUT_PULLUP);
-  pinMode(JOY_R, INPUT_PULLUP);
-  pinMode(JOY_C, INPUT_PULLUP);
-  pinMode(STEP_PIN, OUTPUT);
-  pinMode(DIR_PIN, OUTPUT);
-  digitalWrite(STEP_PIN, LOW);
-  digitalWrite(DIR_PIN, ENDWARD);
+void touch_calibrate()
+{
+  uint16_t calData[5];
+  uint8_t calDataOK = 0;
 
+  // check file system exists
+  if (!SPIFFS.begin()) {
+    Serial.println("Formatting file system");
+    SPIFFS.format();
+    SPIFFS.begin();
+  }
+
+  // check if calibration file exists and size is correct
+  if (SPIFFS.exists(CALIBRATION_FILE)) {
+    if (REPEAT_CAL)
+    {
+      // Delete if we want to re-calibrate
+      SPIFFS.remove(CALIBRATION_FILE);
+    }
+    else
+    {
+      File f = SPIFFS.open(CALIBRATION_FILE, "r");
+      if (f) {
+        if (f.readBytes((char *)calData, 14) == 14)
+          calDataOK = 1;
+        f.close();
+      }
+    }
+  }
+
+  if (calDataOK && !REPEAT_CAL) {
+    // calibration data valid
+    tft.setTouch(calData);
+  } else {
+    // data not valid so recalibrate
+    tft.fillScreen(TFT_BLACK);
+    tft.setCursor(20, 0);
+    tft.setTextFont(2);
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+
+    tft.println("Touch corners as indicated");
+
+    tft.setTextFont(1);
+    tft.println();
+
+    if (REPEAT_CAL) {
+      tft.setTextColor(TFT_RED, TFT_BLACK);
+      tft.println("Set REPEAT_CAL to false to stop this running again!");
+    }
+
+    tft.calibrateTouch(calData, TFT_MAGENTA, TFT_BLACK, 15);
+
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    tft.println("Calibration complete!");
+
+    // store data
+    File f = SPIFFS.open(CALIBRATION_FILE, "w");
+    if (f) {
+      f.write((const unsigned char *)calData, 14);
+      f.close();
+    }
+  }
 }
 
-void loop() {
-  pollButtons();
-  if (shouldStep) doStep();
-  else delay(5);
-}
-
-static void pollButtons() {
-  // update() will call buttonHandler() if PIN transitions to a new state and stays there
-  // for multiple reads over 25+ ms.
-  // Serial.print(digitalRead(JOY_U));
-  // Serial.print(digitalRead(JOY_D));
-  // Serial.print(digitalRead(JOY_L));
-  // Serial.print(digitalRead(JOY_R));
-  // Serial.print(digitalRead(JOY_C));
-  // Serial.println();
-  buttonU.update(digitalRead(JOY_U));
-  buttonD.update(digitalRead(JOY_D));
-  buttonL.update(digitalRead(JOY_L));
-  buttonR.update(digitalRead(JOY_R));
-  buttonC.update(digitalRead(JOY_C));
-}
-
-static void buttonHandler(uint8_t btnId, uint8_t btnState) {
-  if (btnState == BTN_PRESSED) {
+static void buttonHandler(uint8_t btnId, uint8_t pressed) {
+  if (pressed == true) {
     Serial.print("Pushed button"); Serial.println(btnId);
-    if (btnId == JOY_L || btnId == JOY_R) {
-      digitalWrite(DIR_PIN, btnId == JOY_L ? ENDWARD : MOTORWARD);
-      shouldStep = true;
-      Serial.print("shouldStep"); Serial.println(shouldStep);
-    }
-    if (btnId == JOY_U) { 
-      direction = MOTORWARD;
-      Serial.println("Setting direction to motorward");
-    }
-    if (btnId == JOY_D) { 
-      direction = ENDWARD;
-      Serial.println("Setting direction to endward");
-    }
   } else {
     // btnState == BTN_OPEN.
     Serial.print("Released button"); Serial.println(btnId);
-    if (btnId == JOY_L || btnId == JOY_R) {
-      shouldStep = false;
+  }
+
+  // Adjust press state of each key appropriately
+  for (uint8_t b = 0; b < NUM_KEYS; b++) {
+    if (pressed && key[b].contains(t_x, t_y)) 
+      key[b].press(true);  // tell the button it is pressed
+    else
+      key[b].press(false);  // tell the button it is NOT pressed
+  }
+
+  // Check if any key has changed state
+  for (uint8_t b = 0; b < NUM_KEYS; b++) {
+    // If button was just pressed, redraw inverted button
+    if (key[b].justPressed()) {
+      Serial.println("Button " + (String)b + " pressed");
+      key[b].drawButton(true, "ML_DATUM + " + (String)(b * 10) + "px");
+    }
+
+    // If button was just released, redraw normal color button
+    if (key[b].justReleased()) {
+      Serial.println("Button " + (String)b + " released");
+      key[b].drawButton(false, "ML_DATUM + " + (String)(b * 10) + "px");
     }
   }
 }
 
-static void handlerC(uint8_t btnId, uint8_t btnState) {
-  if (btnState == BTN_PRESSED) {
-    // if (btnId == JOY_C) {                                     //ms 12- (there is no ms3 on a tmc2208 so this dip should do nothing?)
-    //   const int steps = 24000;                                //  00: 20000 -> 62.47 millimeters, or .0031235 mm/step, or 160 steps per 0.5mm thread at 1/8 so 20 full steps per rev
-    //   Serial.print("Stepping "); Serial.println(steps);       //   11: 40000 -> 62.91 millimeters, or .00157275 mm/step, or 318 steps per 0.5mm thread at 1/16 so 19.9 full steps per rev
-    //   digitalWrite(DIR_PIN, direction);                       //   11: 48000 -> 75.60 millimeters, or .001575 mm/step, or 317.4 steps per 0.5mm thread
-    //   delay(10);
-    //   for (int i = 0; i<steps; i++) {
-    //     if (i%1000==0) Serial.println(i);
-    //     digitalWrite(STEP_PIN, HIGH);
-    //     delayMicroseconds(40);
-    //     digitalWrite(STEP_PIN, LOW);
-    //     delayMicroseconds(40);
-    //   }
-    //   Serial.print("Done stepping "); Serial.println(steps);
-    //}
+void setup() {
+  
+  Serial.begin(115200);
+  
+  tft.init();
 
+  // Set the rotation before we calibrate
+  tft.setRotation(3);
 
+  // Check for backlight pin if not connected to VCC
+  #ifndef TFT_BL
+    Serial.println("No TFT backlight pin defined");
+  #else
+    pinMode(TFT_BL, OUTPUT);
+    digitalWrite(TFT_BL, HIGH);
+  #endif
 
-  } else {
-    Serial.print("Released button"); Serial.println(btnId);
-  }
+  // call screen calibration
+  touch_calibrate();
+
+  // Clear screen
+  tft.fillScreen(TFT_BLACK);
+
+  tft.setFreeFont(&FreeMono9pt7b);
+  
+  drawButtons();
 }
 
+void loop() {
+  
 
-void doStep() {
-  digitalWrite(STEP_PIN, HIGH);
-  delayMicroseconds(40);
-  digitalWrite(STEP_PIN, LOW);
-  delayMicroseconds(40);
+  // Get current touch state and coordinates
+  bool pressed = tft.getTouch(&t_x, &t_y);
+  touch.update((uint8)pressed);
+
+  
+
 }
