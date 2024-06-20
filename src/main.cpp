@@ -133,100 +133,101 @@ void setupMenuButtons() {
 
 void drawMenu(int row=-1, bool invert=false) {
   int y=0;
+  tft.setCursor(0,0);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
 
   y+=53;
   tft.drawLine(0, y, 240, y, TFT_DARKGREY);
   if (row == -1 || row == 0) {
     if (row==0 && invert) tft.setTextColor(TFT_BLACK, TFT_LIGHTGREY);
-      tft.setFreeFont(MENU1_FONT);
-      tft.setTextDatum(BL_DATUM);
-      tft.drawString("Initial Push", 4, y-11, GFXFF);
-      tft.setTextDatum(BR_DATUM);
-      tft.drawString("1.1", 210, y-11, GFXFF);
-      tft.drawString("mL", 235, y-13, FONT2);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setFreeFont(MENU1_FONT);
+    tft.setTextDatum(BL_DATUM);
+    tft.drawString("Initial Push", 4, y-11, GFXFF);
+    tft.setTextDatum(BR_DATUM);
+    tft.drawString("1.1", 210, y-11, GFXFF);
+    tft.drawString("mL", 235, y-13, FONT2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
 
   y+=53;
   tft.drawLine(0, y, 240, y, TFT_DARKGREY);
   if (row == -1 || row == 1) {
     if (row==1 && invert) tft.setTextColor(TFT_BLACK, TFT_LIGHTGREY);
-      tft.setFreeFont(MENU1_FONT);
-      tft.setTextDatum(BL_DATUM);
-      tft.drawString("Initial Time", 4, y-11, GFXFF);
-      tft.setTextDatum(BR_DATUM);
-      tft.drawString("30", 210, y-11, GFXFF);
-      tft.drawString("sec", 235, y-13, FONT2);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setFreeFont(MENU1_FONT);
+    tft.setTextDatum(BL_DATUM);
+    tft.drawString("Initial Time", 4, y-11, GFXFF);
+    tft.setTextDatum(BR_DATUM);
+    tft.drawString("30", 210, y-11, GFXFF);
+    tft.drawString("sec", 235, y-13, FONT2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
 
   y+=53;
   tft.drawLine(0, y, 240, y, TFT_DARKGREY);
   if (row == -1 || row == 2) {
     if (row==2 && invert) tft.setTextColor(TFT_BLACK, TFT_LIGHTGREY);
-      tft.setFreeFont(MENU1_FONT);
-      tft.setTextDatum(BL_DATUM);
-      tft.drawString("Dose", 4, y-18, GFXFF);
-      tft.setTextDatum(TL_DATUM);
-      tft.setTextFont(GLCD);
-      tft.drawString("Plunger should read: 2.0 mL", 4, y-17, GFXFF);
-      tft.setTextDatum(BR_DATUM);
-      tft.setFreeFont(MENU1_FONT);
-      tft.drawString("2.5", 210, y-11, GFXFF);
-      tft.drawString("mL", 235, y-13, FONT2);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setFreeFont(MENU1_FONT);
+    tft.setTextDatum(BL_DATUM);
+    tft.drawString("Dose", 4, y-18, GFXFF);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextFont(GLCD);
+    tft.drawString("Plunger should read: 2.0 mL", 4, y-17, GFXFF);
+    tft.setTextDatum(BR_DATUM);
+    tft.setFreeFont(MENU1_FONT);
+    tft.drawString("2.5", 210, y-11, GFXFF);
+    tft.drawString("mL", 235, y-13, FONT2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
 
   y+=53;
   tft.drawLine(0, y, 240, y, TFT_DARKGREY);
   if (row == -1 || row == 3) {
     if (row==3 && invert) tft.setTextColor(TFT_BLACK, TFT_LIGHTGREY);
-      tft.setFreeFont(MENU1_FONT);
-      tft.setTextDatum(BL_DATUM);
-      tft.drawString("Infusion Rate", 4, y-18, GFXFF);
-      tft.setTextDatum(TL_DATUM);
-      tft.setTextFont(GLCD);
-      tft.drawString("per 0.1 mL", 4, y-17, GFXFF);
-      tft.setTextDatum(BR_DATUM);
-      tft.setFreeFont(MENU1_FONT);
-      tft.drawString("60", 210, y-11, GFXFF);
-      tft.drawString("sec", 235, y-13, FONT2);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setFreeFont(MENU1_FONT);
+    tft.setTextDatum(BL_DATUM);
+    tft.drawString("Infusion Rate", 4, y-18, GFXFF);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextFont(GLCD);
+    tft.drawString("per 0.1 mL", 4, y-17, GFXFF);
+    tft.setTextDatum(BR_DATUM);
+    tft.setFreeFont(MENU1_FONT);
+    tft.drawString("60", 210, y-11, GFXFF);
+    tft.drawString("sec", 235, y-13, FONT2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
 
   y+=53;
   tft.drawLine(0, y, 240, y, TFT_DARKGREY);
   if (row == -1 || row == 4) {
     if (row==4 && invert) tft.setTextColor(TFT_BLACK, TFT_LIGHTGREY);
-      tft.setFreeFont(MENU1_FONT);
-      tft.setTextDatum(BL_DATUM);
-      tft.drawString("Saline Flush", 4, y-18, GFXFF);
-      tft.setTextDatum(TL_DATUM);
-      tft.setTextFont(GLCD);
-      tft.drawString("(true plunger reading)", 4, y-17, GFXFF);
-      tft.setTextDatum(BR_DATUM);
-      tft.setFreeFont(MENU1_FONT);
-      tft.drawString("2.0", 210, y-11, GFXFF);
-      tft.drawString("mL", 235, y-13, FONT2);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setFreeFont(MENU1_FONT);
+    tft.setTextDatum(BL_DATUM);
+    tft.drawString("Saline Flush", 4, y-18, GFXFF);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextFont(GLCD);
+    tft.drawString("(true plunger reading)", 4, y-17, GFXFF);
+    tft.setTextDatum(BR_DATUM);
+    tft.setFreeFont(MENU1_FONT);
+    tft.drawString("2.0", 210, y-11, GFXFF);
+    tft.drawString("mL", 235, y-13, FONT2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
 
   y+=53;
   tft.drawLine(0, y, 240, y, TFT_DARKGREY);
   if (row == -1 || row == 5) {
     if (row==5 && invert) tft.setTextColor(TFT_BLACK, TFT_LIGHTGREY);
-      tft.setFreeFont(MENU1_FONT);
-      tft.setTextDatum(BL_DATUM);
-      tft.drawString("Saline Rate", 4, y-18, GFXFF);
-      tft.setTextDatum(TL_DATUM);
-      tft.setTextFont(GLCD);
-      tft.drawString("per 0.1 mL", 4, y-17, GFXFF);
-      tft.setTextDatum(BR_DATUM);
-      tft.setFreeFont(MENU1_FONT);
-      tft.drawString("20", 210, y-11, GFXFF);
-      tft.drawString("sec", 235, y-13, FONT2);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setFreeFont(MENU1_FONT);
+    tft.setTextDatum(BL_DATUM);
+    tft.drawString("Saline Rate", 4, y-18, GFXFF);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextFont(GLCD);
+    tft.drawString("per 0.1 mL", 4, y-17, GFXFF);
+    tft.setTextDatum(BR_DATUM);
+    tft.setFreeFont(MENU1_FONT);
+    tft.drawString("20", 210, y-11, GFXFF);
+    tft.drawString("sec", 235, y-13, FONT2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
 }
 
@@ -307,7 +308,7 @@ void status(const char *msg) {
 
 static void buttonHandler(uint8_t btnId, uint8_t pressed) {
   //only check left side if menu not already open
-  if (!menuOpen) {
+  //if (!menuOpen) {
     // Check if any menu coordinate boxes contain the touch coordinates
     for (uint8_t b = 0; b < 6; b++) {
       if (pressed && menu[b].contains(t_x, t_y)) {
@@ -318,10 +319,6 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
     }
     // Check if menu buttons have changed state
     for (uint8_t b = 0; b<6; b++) {
-      if (menu[b].justReleased()) {
-        menu[b].drawButton();       // draw normal
-        drawMenu(b);                // redraw text
-      }
       if (menu[b].justPressed()) {
         menu[b].drawButton(true);   // draw invert
         drawMenu(b, true);          // redraw text invert
@@ -329,10 +326,10 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
         drawKeypad();
       }
     }
-  }
+ // }
 
   // only check keypad if menu is open
-  if (menuOpen) {
+  //if (menuOpen) {
     // / Check if any key coordinate boxes contain the touch coordinates
     for (uint8_t b = 0; b < 15; b++) {
       if (pressed && key[b].contains(t_x, t_y)) {
@@ -342,8 +339,8 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
       }
     }
     // Check if any keypad has changed state
+    bool hidden=false;
     for (uint8_t b = 0; b < 15; b++) {
-      bool hidden=false;
       if (b < 3 || b==14) tft.setFreeFont(LABEL1_FONT);
       else tft.setFreeFont(LABEL2_FONT);
 
@@ -364,19 +361,11 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
           status(""); // Clear the old status
         }
 
-        //exiting, so hide right half
-        if (b == 0 || b == 14) {
-          if (b == 14) {
-            status("Sent value to serial port");
-            Serial.println(numberBuffer);
-            delay(5);
-          }
-
-          tft.fillRect(241, 0, 240, 320, TFT_BLACK);
-          delay(5); // that fill ends up corrupting our button redraw without a delay ?
-
+        //exit, so hide right half
+        if (b == 0) {
           menu[menuOpen-1].drawButton();       // draw normal
           drawMenu(menuOpen-1);                // redraw text
+          tft.fillRect(241, 0, 240, 320, TFT_BLACK);
           hidden = true;
           menuOpen = 0;
         }
@@ -397,23 +386,33 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
           numberBuffer[numberIndex] = 0; // Place null in buffer
         }
 
-        if (!hidden) {
-        // Update the number display field
-        tft.setTextDatum(TL_DATUM);        // Use top left corner as text coord datum
-        tft.setFreeFont(&FreeSans18pt7b);  // Choose a nice font that fits box
-        tft.setTextColor(DISP_TCOLOR);     // Set the font colour
-
-        // Draw the string, the value returned is the width in pixels
-        int xwidth = tft.drawString(numberBuffer, DISP_X + 4, DISP_Y + 12);
-
-        // Now cover up the rest of the line up by drawing a black rectangle.  No flicker this way
-        // but it will not work with italic or oblique fonts due to character overlap.
-        tft.fillRect(DISP_X + 4 + xwidth, DISP_Y + 1, DISP_W - xwidth - 5, DISP_H - 2, TFT_BLACK);
+        if (b == 14) {
+          status("Sent value to serial port");
+          Serial.println(numberBuffer);
         }
       }
     }
-  }
+    if (!hidden) {
+      // Update the number display field
+      tft.setTextDatum(TL_DATUM);        // Use top left corner as text coord datum
+      tft.setFreeFont(&FreeSans18pt7b);  // Choose a nice font that fits box
+      tft.setTextColor(DISP_TCOLOR);     // Set the font colour
 
+      // Draw the string, the value returned is the width in pixels
+      int xwidth = tft.drawString(numberBuffer, DISP_X + 4, DISP_Y + 12);
+
+      // Now cover up the rest of the line up by drawing a black rectangle.  No flicker this way
+      // but it will not work with italic or oblique fonts due to character overlap.
+      tft.fillRect(DISP_X + 4 + xwidth, DISP_Y + 1, DISP_W - xwidth - 5, DISP_H - 2, TFT_BLACK);
+    }
+  //}
+
+    if (hidden) {
+      hidden = false;
+      tft.fillScreen(TFT_RED);
+      setupMenuButtons();
+      drawMenu();
+    }
   
 }
 
