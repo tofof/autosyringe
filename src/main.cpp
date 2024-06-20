@@ -56,7 +56,7 @@ TFT_eSPI tft = TFT_eSPI(); // Invoke custom library
 #define LABEL2_FONT FSSB12  // Keypad numerals
 #define STATUS_FONT GLCD       
 #define MENU1_FONT  FSSB12  // Menu item large
-#define MENU2_FONT  FONT4   // Menu item small
+uint8_t menuOpen = 0; //offset by 1 so no menus open = 0 false, otherwise 1-6 true
 
 
 // Numeric display box size and location
@@ -82,12 +82,12 @@ uint16_t t_x = 0, t_y = 0;
 
 
 // Create 15 keys for the keypad
-char keyLabel[15][5] = {"New", "Del", "Send", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "#" };
-uint16_t keyColor[15] = {TFT_RED, TFT_DARKGREY, TFT_DARKGREEN,
+char keyLabel[15][5] = {"Exit", "Clr", "<--", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "Send" };
+uint16_t keyColor[15] = {TFT_RED, TFT_DARKGREY, TFT_DARKGREY,
                          TFT_BLUE, TFT_BLUE, TFT_BLUE,
                          TFT_BLUE, TFT_BLUE, TFT_BLUE,
                          TFT_BLUE, TFT_BLUE, TFT_BLUE,
-                         TFT_BLUE, TFT_BLUE, TFT_BLUE
+                         TFT_BLUE, TFT_BLUE, TFT_DARKGREEN
                         };
 
 // Invoke the TFT_eSPI button class and create all the button objects
@@ -98,11 +98,14 @@ TFT_eSPI_Button menu[6];
 
 
 void drawKeypad() {
+  // Draw number display area and frame
+  tft.fillRect(DISP_X, DISP_Y, DISP_W, DISP_H, TFT_BLACK);
+  tft.drawRect(DISP_X, DISP_Y, DISP_W, DISP_H, TFT_WHITE);
   for (uint8_t row = 0; row < 5; row++) {
     for (uint8_t col = 0; col < 3; col++) {
       uint8_t b = col + row * 3;
 
-      if (b < 3) tft.setFreeFont(LABEL1_FONT);
+      if (b < 3 || b == 14) tft.setFreeFont(LABEL1_FONT);
       else tft.setFreeFont(LABEL2_FONT);
 
       key[b].initButton(&tft, KEY_X + col * (KEY_W + KEY_SPACING_X),
@@ -227,8 +230,6 @@ void drawMenu(int row=-1, bool invert=false) {
   }
 }
 
-
-
 void touch_calibrate() {
   uint16_t calData[5];
   uint8_t calDataOK = 0;
@@ -293,12 +294,10 @@ void touch_calibrate() {
   }
 }
 
-
-
 // Print something in the mini status bar
 void status(const char *msg) {
   tft.setTextPadding(240);
-  //tft.setCursor(STATUS_X, STATUS_Y);
+  tft.setCursor(STATUS_X, STATUS_Y);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextFont(STATUS_FONT);
   tft.setTextDatum(TC_DATUM);
@@ -306,112 +305,116 @@ void status(const char *msg) {
   tft.drawString(msg, STATUS_X, STATUS_Y);
 }
 
-
-
 static void buttonHandler(uint8_t btnId, uint8_t pressed) {
-  // Check if any menu coordinate boxes contain the touch coordinates
-  for (uint8_t b = 0; b < 6; b++) {
-    if (pressed && menu[b].contains(t_x, t_y)) {
-      menu[b].press(true);  // tell the button it is pressed
-    } else {
-      menu[b].press(false);  // tell the button it is NOT pressed
+  //only check left side if menu not already open
+  if (!menuOpen) {
+    // Check if any menu coordinate boxes contain the touch coordinates
+    for (uint8_t b = 0; b < 6; b++) {
+      if (pressed && menu[b].contains(t_x, t_y)) {
+        menu[b].press(true);  // tell the button it is pressed
+      } else {
+        menu[b].press(false);  // tell the button it is NOT pressed
+      }
+    }
+    // Check if menu buttons have changed state
+    for (uint8_t b = 0; b<6; b++) {
+      if (menu[b].justReleased()) {
+        menu[b].drawButton();       // draw normal
+        drawMenu(b);                // redraw text
+      }
+      if (menu[b].justPressed()) {
+        menu[b].drawButton(true);   // draw invert
+        drawMenu(b, true);          // redraw text invert
+        menuOpen=b+1;
+        drawKeypad();
+      }
     }
   }
-  // Check if menu buttons have changed state
-  for (uint8_t b = 0; b<6; b++) {
-    if (menu[b].justReleased()) {
-      menu[b].drawButton();       // draw normal
-      drawMenu(b);                // redraw text
+
+  // only check keypad if menu is open
+  if (menuOpen) {
+    // / Check if any key coordinate boxes contain the touch coordinates
+    for (uint8_t b = 0; b < 15; b++) {
+      if (pressed && key[b].contains(t_x, t_y)) {
+        key[b].press(true);  // tell the button it is pressed
+      } else {
+        key[b].press(false);  // tell the button it is NOT pressed
+      }
     }
+    // Check if any keypad has changed state
+    for (uint8_t b = 0; b < 15; b++) {
+      bool hidden=false;
+      if (b < 3 || b==14) tft.setFreeFont(LABEL1_FONT);
+      else tft.setFreeFont(LABEL2_FONT);
 
-    if (menu[b].justPressed()) {
-      menu[b].drawButton(true);   // draw invert
-      drawMenu(b, true);          // redraw text invert
-      delay(5);
-    }
-  }
+      if (key[b].justReleased()) {
+        if (b != 0) key[b].drawButton();     // draw normal
+      }
 
+      if (key[b].justPressed()) {
+        key[b].drawButton(true);  // draw invert
 
-  // / Check if any key coordinate boxes contain the touch coordinates
-  for (uint8_t b = 0; b < 15; b++) {
-    if (pressed && key[b].contains(t_x, t_y)) {
-      key[b].press(true);  // tell the button it is pressed
-    } else {
-      key[b].press(false);  // tell the button it is NOT pressed
-    }
-  }
-  // Check if any keypad has changed state
-  for (uint8_t b = 0; b < 15; b++) {
-
-    if (b < 3) tft.setFreeFont(LABEL1_FONT);
-    else tft.setFreeFont(LABEL2_FONT);
-
-    if (key[b].justReleased()) key[b].drawButton();     // draw normal
-
-    if (key[b].justPressed()) {
-      key[b].drawButton(true);  // draw invert
-
-      // if a numberpad button, append the relevant # to the numberBuffer
-      if (b >= 3) {
-        //try to hide keypad when # pressed
-        if (b == 14) {
-
-          // KEY_X 280 // Centre of key
-          // KEY_Y 96
-          // KEY_W 62 // Width and height
-          // KEY_H 30
-          // KEY_SPACING_X 18 // X and Y gap
-          // KEY_SPACING_Y 20
-          // KEY_TEXTSIZE 1   // Font size multiplier
-
-          tft.fillRect(KEY_X-(KEY_W/2), KEY_Y-(KEY_H/2), KEY_W, KEY_H, TFT_BLACK);
+        // if a numberpad button, append the relevant # to the numberBuffer
+        if (b >= 3 && b != 14) {
+          if (numberIndex < NUM_LEN) {
+            numberBuffer[numberIndex] = keyLabel[b][0];
+            numberIndex++;
+            numberBuffer[numberIndex] = 0; // zero terminate
+          }
+          status(""); // Clear the old status
         }
 
-        if (numberIndex < NUM_LEN) {
-          numberBuffer[numberIndex] = keyLabel[b][0];
-          numberIndex++;
-          numberBuffer[numberIndex] = 0; // zero terminate
+        //exiting, so hide right half
+        if (b == 0 || b == 14) {
+          if (b == 14) {
+            status("Sent value to serial port");
+            Serial.println(numberBuffer);
+            delay(5);
+          }
+
+          tft.fillRect(241, 0, 240, 320, TFT_BLACK);
+          delay(5); // that fill ends up corrupting our button redraw without a delay ?
+
+          menu[menuOpen-1].drawButton();       // draw normal
+          drawMenu(menuOpen-1);                // redraw text
+          hidden = true;
+          menuOpen = 0;
         }
-        status(""); // Clear the old status
-      }
 
-      // Del button, so delete last char
-      if (b == 1) {
-        numberBuffer[numberIndex] = 0;
-        if (numberIndex > 0) {
-          numberIndex--;
-          numberBuffer[numberIndex] = 0;//' ';
+        // Del button, so delete last char
+        if (b == 2) {
+          numberBuffer[numberIndex] = 0;
+          if (numberIndex > 0) {
+            numberIndex--;
+            numberBuffer[numberIndex] = 0;//' ';
+          }
+          status(""); // Clear the old status
         }
-        status(""); // Clear the old status
+
+        if (b == 1) {
+          status("Value cleared");
+          numberIndex = 0; // Reset index to 0
+          numberBuffer[numberIndex] = 0; // Place null in buffer
+        }
+
+        if (!hidden) {
+        // Update the number display field
+        tft.setTextDatum(TL_DATUM);        // Use top left corner as text coord datum
+        tft.setFreeFont(&FreeSans18pt7b);  // Choose a nice font that fits box
+        tft.setTextColor(DISP_TCOLOR);     // Set the font colour
+
+        // Draw the string, the value returned is the width in pixels
+        int xwidth = tft.drawString(numberBuffer, DISP_X + 4, DISP_Y + 12);
+
+        // Now cover up the rest of the line up by drawing a black rectangle.  No flicker this way
+        // but it will not work with italic or oblique fonts due to character overlap.
+        tft.fillRect(DISP_X + 4 + xwidth, DISP_Y + 1, DISP_W - xwidth - 5, DISP_H - 2, TFT_BLACK);
+        }
       }
-
-      if (b == 2) {
-        status("Sent value to serial port");
-        Serial.println(numberBuffer);
-      }
-      // we dont really check that the text field makes sense
-      // just try to call
-      if (b == 0) {
-        status("Value cleared");
-        numberIndex = 0; // Reset index to 0
-        numberBuffer[numberIndex] = 0; // Place null in buffer
-      }
-
-      // Update the number display field
-      tft.setTextDatum(TL_DATUM);        // Use top left corner as text coord datum
-      tft.setFreeFont(&FreeSans18pt7b);  // Choose a nice font that fits box
-      tft.setTextColor(DISP_TCOLOR);     // Set the font colour
-
-      // Draw the string, the value returned is the width in pixels
-      int xwidth = tft.drawString(numberBuffer, DISP_X + 4, DISP_Y + 12);
-
-      // Now cover up the rest of the line up by drawing a black rectangle.  No flicker this way
-      // but it will not work with italic or oblique fonts due to character overlap.
-      tft.fillRect(DISP_X + 4 + xwidth, DISP_Y + 1, DISP_W - xwidth - 5, DISP_H - 2, TFT_BLACK);
-
-      delay(5);
     }
   }
+
+  
 }
 
 
@@ -425,10 +428,7 @@ void setup() {
   touch_calibrate();
   tft.fillScreen(TFT_BLACK);
 
-  // Draw number display area and frame
-  tft.fillRect(DISP_X, DISP_Y, DISP_W, DISP_H, TFT_BLACK);
-  tft.drawRect(DISP_X, DISP_Y, DISP_W, DISP_H, TFT_WHITE);
-  drawKeypad();
+ 
   setupMenuButtons();
   drawMenu();
 
