@@ -82,7 +82,7 @@ uint16_t t_x = 0, t_y = 0;
 
 
 // Create 15 keys for the keypad
-char keyLabel[15][5] = {"Exit", "Clr", "<--", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "Send" };
+char keyLabel[15][6] = {"Exit", "Clear", "<--", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "Send" };
 uint16_t keyColor[15] = {TFT_RED, TFT_DARKGREY, TFT_DARKGREY,
                          TFT_BLUE, TFT_BLUE, TFT_BLUE,
                          TFT_BLUE, TFT_BLUE, TFT_BLUE,
@@ -93,9 +93,6 @@ uint16_t keyColor[15] = {TFT_RED, TFT_DARKGREY, TFT_DARKGREY,
 // Invoke the TFT_eSPI button class and create all the button objects
 TFT_eSPI_Button key[15];
 TFT_eSPI_Button menu[6];
-
-
-
 
 void drawKeypad() {
   // Draw number display area and frame
@@ -304,11 +301,12 @@ void status(const char *msg) {
   tft.setTextDatum(TC_DATUM);
   tft.setTextSize(1);
   tft.drawString(msg, STATUS_X, STATUS_Y);
+  tft.setTextPadding(0);
 }
 
 static void buttonHandler(uint8_t btnId, uint8_t pressed) {
   //only check left side if menu not already open
-  //if (!menuOpen) {
+  if (!menuOpen) {
     // Check if any menu coordinate boxes contain the touch coordinates
     for (uint8_t b = 0; b < 6; b++) {
       if (pressed && menu[b].contains(t_x, t_y)) {
@@ -319,6 +317,10 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
     }
     // Check if menu buttons have changed state
     for (uint8_t b = 0; b<6; b++) {
+      if (menu[b].justReleased()) {
+        menu[b].drawButton();       // draw invert
+        drawMenu(b);                // redraw text invert
+      }
       if (menu[b].justPressed()) {
         menu[b].drawButton(true);   // draw invert
         drawMenu(b, true);          // redraw text invert
@@ -326,10 +328,10 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
         drawKeypad();
       }
     }
- // }
+ }
 
   // only check keypad if menu is open
-  //if (menuOpen) {
+  if (menuOpen) {
     // / Check if any key coordinate boxes contain the touch coordinates
     for (uint8_t b = 0; b < 15; b++) {
       if (pressed && key[b].contains(t_x, t_y)) {
@@ -363,8 +365,6 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
 
         //exit, so hide right half
         if (b == 0) {
-          menu[menuOpen-1].drawButton();       // draw normal
-          drawMenu(menuOpen-1);                // redraw text
           tft.fillRect(241, 0, 240, 320, TFT_BLACK);
           hidden = true;
           menuOpen = 0;
@@ -405,14 +405,7 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
       // but it will not work with italic or oblique fonts due to character overlap.
       tft.fillRect(DISP_X + 4 + xwidth, DISP_Y + 1, DISP_W - xwidth - 5, DISP_H - 2, TFT_BLACK);
     }
-  //}
-
-    if (hidden) {
-      hidden = false;
-      tft.fillScreen(TFT_RED);
-      setupMenuButtons();
-      drawMenu();
-    }
+  }
   
 }
 
