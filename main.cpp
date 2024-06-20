@@ -35,16 +35,16 @@ const float mm_per_mL[21]={ 0, 0, 0,16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 void setupDosage(int syringeSize) {
   int steps_per_mL = STEPS_PER_MM * mm_per_mL[syringeSize];
-  float bolusDose_mL = 1.1;
-  float bolusSteps = bolusDose_mL * steps_per_mL;
-  int bolusTime_sec = 45;
-  int bolusDelay_us = bolusTime_sec * 5e5 / bolusSteps;    // 2 delays per step, so seconds * 1e6 / 2 = seconds * 5e5     THIS IS ASSUMING VARIABLE DELAYS IN 2 PART
-  // bolusDelay_us is on the order of 4000, ie 4ms, so we should probably do a 'nextStepTime' in micros that we schedule and check against
+  float initialDose_mL = 1.1;
+  float initialSteps = initialDose_mL * steps_per_mL;
+  int initialTime_sec = 30;
+  int initialDelay_us = initialTime_sec * 5e5 / initialSteps;    // 2 delays per step, so seconds * 1e6 / 2 = seconds * 5e5     THIS IS ASSUMING VARIABLE DELAYS IN 2 PART
+  // initialDelay_us is on the order of 4000, ie 4ms, so we should probably do a 'nextStepTime' in micros that we schedule and check against
   // largest value you can use with delayMicroseconds is 16383
   // and of course we will be fighting other execution times like drawing the screen :(
   // might need https://github.com/DrDiettrich/ALib0/blob/master/examples/MultipleTasks/MultipleTasks.ino or something like it to deal with the problem
   // or might need to calculate moment of go, keep it stored, count steps, and calculate current next step time so we can take more than one step in a row to 'catch up'
-  // like `while (micros() > curStep * bolusDelay_us + start_us) {step(); curStep++;} and do FIXED NOT VARIABLE 40us between the two step pieces
+  // like `while (micros() > curStep * initialDelay_us + start_us) {step(); curStep++;} and do FIXED NOT VARIABLE 40us between the two step pieces
 
 }
 

@@ -283,68 +283,68 @@ void loop() {
   //   delay (200);
   // }
 
-  // delay(4000);
+  delay(4000);
 
-  // // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-  // // Now show setting the 12 datum positions works with free fonts
-  // // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  // Now show setting the 12 datum positions works with free fonts
+  // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-  // // Numbers, floats and strings can be drawn relative to a datum
-  // tft.fillScreen(TFT_BLACK);
-  // header("Draw text relative to a datum");
+  // Numbers, floats and strings can be drawn relative to a datum
+  tft.fillScreen(TFT_BLACK);
+  header("Draw text relative to a datum");
 
-  // tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-  // tft.setFreeFont(FSS9);
+  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  tft.setFreeFont(FSS9);
   
-  // tft.setTextDatum(TL_DATUM);
-  // tft.drawString("[Top left}", 20, 60, GFXFF);
-  // drawDatum(20,60);
+  tft.setTextDatum(TL_DATUM);
+  tft.drawString("[Top left}", 20, 60, GFXFF);
+  drawDatum(20,60);
 
-  // tft.setTextDatum(TC_DATUM);
-  // tft.drawString("[Top centre]", 240, 60, GFXFF);
-  // drawDatum(240,60);
+  tft.setTextDatum(TC_DATUM);
+  tft.drawString("[Top centre]", 240, 60, GFXFF);
+  drawDatum(240,60);
 
-  // tft.setTextDatum(TR_DATUM);
-  // tft.drawString("[Top right]", 460, 60, GFXFF);
-  // drawDatum(460,60);
+  tft.setTextDatum(TR_DATUM);
+  tft.drawString("[Top right]", 460, 60, GFXFF);
+  drawDatum(460,60);
 
-  // tft.setTextDatum(ML_DATUM);
-  // tft.drawString("[Middle left]", 20, 140, GFXFF);
-  // drawDatum(20,140);
+  tft.setTextDatum(ML_DATUM);
+  tft.drawString("[Middle left]", 20, 140, GFXFF);
+  drawDatum(20,140);
 
-  // tft.setTextDatum(MC_DATUM);
-  // tft.drawString("[Middle centre]", 240, 140, GFXFF);
-  // drawDatum(240,140);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString("[Middle centre]", 240, 140, GFXFF);
+  drawDatum(240,140);
 
-  // tft.setTextDatum(MR_DATUM);
-  // tft.drawString("[Middle right]", 460, 140, GFXFF);
-  // drawDatum(460,140);
+  tft.setTextDatum(MR_DATUM);
+  tft.drawString("[Middle right]", 460, 140, GFXFF);
+  drawDatum(460,140);
 
-  // tft.setTextDatum(BL_DATUM);
-  // tft.drawString("[Bottom Left]", 20, 220, GFXFF);
-  // drawDatum(20,220);
+  tft.setTextDatum(BL_DATUM);
+  tft.drawString("[Bottom Left]", 20, 220, GFXFF);
+  drawDatum(20,220);
 
-  // tft.setTextDatum(BC_DATUM);
-  // tft.drawString("[Bottom centre]", 240, 220, GFXFF);
-  // drawDatum(240,220);
+  tft.setTextDatum(BC_DATUM);
+  tft.drawString("[Bottom centre]", 240, 220, GFXFF);
+  drawDatum(240,220);
 
-  // tft.setTextDatum(BR_DATUM);
-  // tft.drawString("[Bottom right]", 460, 220, GFXFF);
-  // drawDatum(460,220);
+  tft.setTextDatum(BR_DATUM);
+  tft.drawString("[Bottom right]", 460, 220, GFXFF);
+  drawDatum(460,220);
 
-  // tft.setTextDatum(L_BASELINE);
-  // tft.drawString("[Left baseline]", 20, 300, GFXFF);
-  // drawDatum(20,300);
+  tft.setTextDatum(L_BASELINE);
+  tft.drawString("[Left baseline]", 20, 300, GFXFF);
+  drawDatum(20,300);
 
-  // tft.setTextDatum(C_BASELINE);
-  // tft.drawString("[Centre baseline]", 240, 300, GFXFF);
-  // drawDatum(240,300);
+  tft.setTextDatum(C_BASELINE);
+  tft.drawString("[Centre baseline]", 240, 300, GFXFF);
+  drawDatum(240,300);
 
-  // tft.setTextDatum(R_BASELINE);
-  // tft.drawString("[Right baseline]", 460, 300, GFXFF);
-  // drawDatum(460,300);
+  tft.setTextDatum(R_BASELINE);
+  tft.drawString("[Right baseline]", 460, 300, GFXFF);
+  drawDatum(460,300);
 
-  // //while(1);
-  // delay(4000);
+  //while(1);
+  delay(4000);
 
 }
