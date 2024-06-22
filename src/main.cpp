@@ -1,18 +1,10 @@
+#include <arduino.h>
 
+typedef unsigned long millis_t; //unless defined elsewhere
 
 #include <debounce.h>
 static void buttonHandler(uint8_t, uint8_t);
 static Button touch(0, buttonHandler);
-
-// Stepper (TMC2208)
-#define DIR_PIN   15     // Direction
-#define STEP_PIN  16     // Step
-#define ENDWARD true
-#define MOTORWARD false
-#define STEPS_PER_MM 320  // with m12 on 00, it's 160 steps per 0.5 mm, 320 steps per 1 mm, or 32 steps per 0.1 mm = 1 dmm
-bool direction = ENDWARD;
-bool shouldStep = false;
-void doStep();
 
 #include "FS.h"
 #include <SPI.h>
@@ -52,43 +44,100 @@ uint16_t keyColor[15] = {TFT_RED, TFT_DARKGREY, TFT_DARKGREY,
                         };
 TFT_eSPI_Button key[15];
 TFT_eSPI_Button menu[6];
+TFT_eSPI_Button controls[12];
 uint16_t t_x = 0, t_y = 0;
 #define MENU1_FONT  FSSB12  // Menu item large
-bool menuOpen = false;
-void drawKeypad();
-void drawMenu(int, bool);
-void setupMenuButtons();
+int menuOpen = 0; //1-indexed
 void touchCalibrate();
-void status(const char*);
 void setupScreen();
+void setupMenuButtons();
+void drawKeypad();
+void drawControls();
+void drawMenu(int, bool);
+void status(const char*);
+
+// Stepper (TMC2208)
+#define DIR_PIN   4    // Direction
+#define STEP_PIN  5     // Step
+#define ENDWARD true
+#define MOTORWARD false
+#define STEPS_PER_MM 320  // with m12 on 00, it's 160 steps per 0.5 mm, 320 steps per 1 mm, or 32 steps per 0.1 mm = 1 dmm
+int dirMult = 0;
+bool shouldStep = false;
+int16_t position = 0;
+void doStep();
+void doJog(int);
+
+// Medicine
+void setupDosage(/*int*/);
+#define MAX_SYRINGE 21   // one larger than max syringe size in mL
+                         // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19  20          Syringe total mL
+const float mm_per_mL[21]={ 0, 0, 0,16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int steps_per_mL = STEPS_PER_MM * mm_per_mL[3];
+float initialDose_mL = 1.1;
+int initialSteps = initialDose_mL * steps_per_mL;
+int initialTime_sec = 30;
+int initialDelay_us = initialTime_sec * 1e6 / initialSteps;
+float totalDose_mL = 2.5;
+float plungerDose_mL = totalDose_mL - 0.5;
+float steadyDose_mL = plungerDose_mL - initialDose_mL;
+int steadySteps = steadyDose_mL * steps_per_mL;
+int steadyTime_sec = 60; // time per 0.1 mL
+int steadyDelay_us = steadyTime_sec * 1e6 / (0.1 * steps_per_mL);
+float salineFlush_mL = 2.0;
+int salineSteps = salineFlush_mL * steps_per_mL;
+int salineTime_sec = 20; // time per 0.1 mL after the first 0.5 mL of saline (which is really the last 0.5 of dose)
+int salineDelay_us = salineTime_sec * 1e6 / (0.1 * steps_per_mL);
+
+// initialDelay_us is on the order of 4000, ie 4ms, so we should probably do a 'nextStepTime' in micros that we schedule and check against
+// largest value you can use with delayMicroseconds is 16383
+// and of course we will be fighting other execution times like drawing the screen :(
+// might need https://github.com/DrDiettrich/ALib0/blob/master/examples/MultipleTasks/MultipleTasks.ino or something like it to deal with the problem
+// or might need to calculate moment of go, keep it stored, count steps, and calculate current next step time so we can take more than one step in a row to 'catch up'
+// like `while (micros() > curStep * initialDelay_us + start_us) {step(); curStep++;} and do FIXED NOT VARIABLE 40us between the two step pieces
+
+
+
 
 
 void setup() {
-  Serial.begin(115200);
   setupScreen();
+  delay(1000);
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
   digitalWrite(STEP_PIN, LOW);
+  digitalWrite(DIR_PIN, MOTORWARD);
+  setupDosage();
+  doJog(20000);
+  position=0;
   digitalWrite(DIR_PIN, ENDWARD);
+  dirMult = digitalRead(DIR_PIN) ? 1 : -1;
+  status(itoa(position, "     ", 10));
 }
 
 
 
 void loop(void) {
-  bool pressed = tft.getTouch(&t_x, &t_y); // Pressed will be set true is there is a valid touch on the screen
-  touch.update((uint8)pressed);
+  if (tft.getTouchRawZ() > 100) { bool pressed = tft.getTouch(&t_x, &t_y); touch.update((uint8)pressed);} 
   if (shouldStep) doStep();
   else delay(5);
 }
 
-
-void doStep() {
-  digitalWrite(STEP_PIN, HIGH);
-  delayMicroseconds(40);
-  digitalWrite(STEP_PIN, LOW);
-  delayMicroseconds(40);
+void drawControls() {
+  controls[0].initButton(&tft, 480*7/12, 32, 54, 54, TFT_WHITE, TFT_RED, TFT_WHITE, "<", 1);
+  controls[1].initButton(&tft, 480*67/96, 32, 30, 30, TFT_WHITE, TFT_RED, TFT_WHITE, "<", 1);
+  controls[2].initButton(&tft, 480*77/96, 32, 30, 30, TFT_WHITE, TFT_GREEN, TFT_WHITE, ">", 1);
+  controls[3].initButton(&tft, 480*11/12, 32, 54, 54, TFT_WHITE, TFT_GREEN, TFT_WHITE, ">", 1);
+  controls[4].initButton(&tft, 480*3/4, 200, 200, 54, TFT_WHITE, TFT_BLUE, TFT_WHITE, "Start", 1);
+  tft.setFreeFont(FSSB24);
+  controls[0].drawButton();
+  controls[3].drawButton();
+  controls[4].drawButton();
+  tft.setFreeFont(FSSB12);
+  controls[1].drawButton();
+  controls[2].drawButton();
+  
 }
-
 
 void drawMenu(int row=-1, bool invert=false) {
   int y=0;
@@ -103,7 +152,7 @@ void drawMenu(int row=-1, bool invert=false) {
     tft.setTextDatum(BL_DATUM);
     tft.drawString("Initial Push", 4, y-11, GFXFF);
     tft.setTextDatum(BR_DATUM);
-    tft.drawString("1.1", 210, y-11, GFXFF);
+    tft.drawFloat(initialDose_mL, 1, 210, y-11, GFXFF);
     tft.drawString("mL", 235, y-13, FONT2);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
@@ -116,7 +165,7 @@ void drawMenu(int row=-1, bool invert=false) {
     tft.setTextDatum(BL_DATUM);
     tft.drawString("Initial Time", 4, y-11, GFXFF);
     tft.setTextDatum(BR_DATUM);
-    tft.drawString("30", 210, y-11, GFXFF);
+    tft.drawNumber(initialTime_sec, 210, y-11, GFXFF);
     tft.drawString("sec", 235, y-13, FONT2);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
@@ -130,10 +179,12 @@ void drawMenu(int row=-1, bool invert=false) {
     tft.drawString("Dose", 4, y-18, GFXFF);
     tft.setTextDatum(TL_DATUM);
     tft.setTextFont(GLCD);
-    tft.drawString("Plunger should read: 2.0 mL", 4, y-17, GFXFF);
+    int offset = tft.drawString("Plunger should read: ", 4, y-17, GFXFF);
+    offset += tft.drawFloat(plungerDose_mL, 1, 4+offset, y-17, GFXFF);
+    tft.drawString(" mL", 4+offset, y-17, GFXFF);
     tft.setTextDatum(BR_DATUM);
     tft.setFreeFont(MENU1_FONT);
-    tft.drawString("2.5", 210, y-11, GFXFF);
+    tft.drawFloat(totalDose_mL, 1, 210, y-11, GFXFF);
     tft.drawString("mL", 235, y-13, FONT2);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
@@ -150,7 +201,7 @@ void drawMenu(int row=-1, bool invert=false) {
     tft.drawString("per 0.1 mL", 4, y-17, GFXFF);
     tft.setTextDatum(BR_DATUM);
     tft.setFreeFont(MENU1_FONT);
-    tft.drawString("60", 210, y-11, GFXFF);
+    tft.drawNumber(steadyTime_sec, 210, y-11, GFXFF);
     tft.drawString("sec", 235, y-13, FONT2);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
@@ -167,7 +218,7 @@ void drawMenu(int row=-1, bool invert=false) {
     tft.drawString("(true plunger reading)", 4, y-17, GFXFF);
     tft.setTextDatum(BR_DATUM);
     tft.setFreeFont(MENU1_FONT);
-    tft.drawString("2.0", 210, y-11, GFXFF);
+    tft.drawFloat(salineFlush_mL, 1, 210, y-11, GFXFF);
     tft.drawString("mL", 235, y-13, FONT2);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
@@ -184,113 +235,14 @@ void drawMenu(int row=-1, bool invert=false) {
     tft.drawString("per 0.1 mL", 4, y-17, GFXFF);
     tft.setTextDatum(BR_DATUM);
     tft.setFreeFont(MENU1_FONT);
-    tft.drawString("20", 210, y-11, GFXFF);
+    tft.drawNumber(salineTime_sec, 210, y-11, GFXFF);
     tft.drawString("sec", 235, y-13, FONT2);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
   }
 }
 
-
-static void buttonHandler(uint8_t btnId, uint8_t pressed) {
-  if (!menuOpen) {  //only check left side if menu not already open
-    for (uint8_t b = 0; b < 6; b++) {
-      if (pressed && menu[b].contains(t_x, t_y)) {  // Check if any menu coordinate boxes contain the touch coordinates
-        menu[b].press(true);  
-      } else {
-        menu[b].press(false); 
-      }
-    }
-    for (uint8_t b = 0; b<6; b++) { // Check if menu buttons have changed state
-      if (menu[b].justReleased()) {
-        menu[b].drawButton();       // draw invert
-        drawMenu(b);                // redraw text invert
-      }
-      if (menu[b].justPressed()) {
-        menu[b].drawButton(true);   // draw invert
-        drawMenu(b, true);          // redraw text invert
-        menuOpen=true;
-        drawKeypad();
-      }
-    }
-  }
-
-  
-  if (menuOpen) { // only check keypad if menu is open
-    for (uint8_t b = 0; b < 15; b++) {
-      if (pressed && key[b].contains(t_x, t_y)) { // Check if any key coordinate boxes contain the touch coordinates
-        key[b].press(true);  // tell the button it is pressed
-      } else {
-        key[b].press(false);  // tell the button it is NOT pressed
-      }
-    }
-
-    bool hidden=false;
-    for (uint8_t b = 0; b < 15; b++) {      // Check if any keypad has changed state
-      if (b < 3 || b==14) tft.setFreeFont(LABEL1_FONT);  //handle these in preparation for redrawing
-      else tft.setFreeFont(LABEL2_FONT);
-
-      if (key[b].justReleased()) {
-        if (b != 0) key[b].drawButton();     // draw normal, except exit button doesn't get redrawn
-      }
-
-      if (key[b].justPressed()) {
-        key[b].drawButton(true);  // draw invert
-
-        if (b >= 3 && b != 14) {
-          if (numberIndex < NUM_LEN) {
-            numberBuffer[numberIndex] = keyLabel[b][0];   // if a numberpad button, append the relevant # to the numberBuffer
-            numberIndex++;
-            numberBuffer[numberIndex] = 0; // zero terminate
-          }
-          status(""); // Clear the old status
-        }
-
-        if (b == 0) { //exit, so hide right half
-          tft.fillRect(241, 0, 240, 320, TFT_BLACK);
-          hidden = true;
-          menuOpen = false;
-        }
-
-        if (b == 1) { // Clear button, so empty number field
-          status("Value cleared");
-          numberIndex = 0; // Reset index to 0
-          numberBuffer[numberIndex] = 0; // Place null in buffer
-        }
-
-        if (b == 2) { // Del button, so delete last char
-          numberBuffer[numberIndex] = 0;
-          if (numberIndex > 0) {          
-            numberIndex--;
-            numberBuffer[numberIndex] = 0;//' ';
-          }
-          status(""); // Clear the old status
-        }
- 
-        if (b == 14) {  // Send button
-          status("Sent value to serial port");
-          Serial.println(numberBuffer);
-        }
-      }
-    }
-    
-    if (!hidden) {
-      // Update the number display field
-      tft.setTextDatum(TL_DATUM);        // Use top left corner as text coord datum
-      tft.setFreeFont(&FreeSans18pt7b);  // Choose a nice font that fits box
-      tft.setTextColor(DISP_TCOLOR);     // Set the font colour
-
-      // Draw the string, the value returned is the width in pixels
-      int xwidth = tft.drawString(numberBuffer, DISP_X + 4, DISP_Y + 12);
-
-      // Now cover up the rest of the line up by drawing a black rectangle.  No flicker this way
-      // but it will not work with italic or oblique fonts due to character overlap.
-      tft.fillRect(DISP_X + 4 + xwidth, DISP_Y + 1, DISP_W - xwidth - 5, DISP_H - 2, TFT_BLACK);
-    }
-  }
-}
-
-
 void drawKeypad() {
+  tft.fillRect(241, 0, 240, 320, TFT_BLACK);
   // Draw number display area and frame
   tft.fillRect(DISP_X, DISP_Y, DISP_W, DISP_H, TFT_BLACK);
   tft.drawRect(DISP_X, DISP_Y, DISP_W, DISP_H, TFT_WHITE);
@@ -310,6 +262,18 @@ void drawKeypad() {
   }
 }
 
+void setupDosage(/*int syringeSize*/) {
+  /*steps_per_mL = STEPS_PER_MM * mm_per_mL[syringeSize];*/
+  initialSteps = initialDose_mL * steps_per_mL;
+  initialDelay_us = initialTime_sec * 1e6 / initialSteps;
+  plungerDose_mL = totalDose_mL - 0.5;
+  steadyDose_mL = plungerDose_mL - initialDose_mL;
+  steadySteps = steadyDose_mL * steps_per_mL;
+  steadyDelay_us = steadyTime_sec * 1e6 / (0.1 * steps_per_mL);
+  salineSteps = salineFlush_mL * steps_per_mL;
+  salineDelay_us = salineTime_sec * 1e6 / (0.1 * steps_per_mL);
+}
+
 void setupMenuButtons() {
   for (int y=53; y<320; y+=53) {
     menu[y/53-1].initButton(&tft, 120, y-53/2, 240, 53, TFT_BLACK, TFT_BLACK, TFT_LIGHTGREY, "", 1);
@@ -323,7 +287,6 @@ void touchCalibrate() {
 
   // check file system exists
   if (!SPIFFS.begin()) {
-    Serial.println("formatting file system");
     SPIFFS.format();
     SPIFFS.begin();
   }
@@ -399,8 +362,186 @@ void setupScreen() {
   tft.fillScreen(TFT_BLACK);
   setupMenuButtons();
   drawMenu();
+  drawControls();
 
   //touchscreen gives hi not low when engaged, so these functions act swapped
   touch.setPushDebounceInterval(100);
   touch.setReleaseDebounceInterval(0);
+}
+
+void doStep() {
+  digitalWrite(STEP_PIN, HIGH);
+  delayMicroseconds(50);
+  digitalWrite(STEP_PIN, LOW);
+  delayMicroseconds(50);
+  position += dirMult;
+}
+
+void doJog(int steps) {
+  for (int i=0; i<steps; i++) {
+    digitalWrite(STEP_PIN, HIGH);
+    delayMicroseconds(50);
+    digitalWrite(STEP_PIN, LOW);
+    delayMicroseconds(50);
+  }
+  position += dirMult * steps;
+  position = max(0, (int)position);
+  position = min(26400, (int)position);
+  status(itoa(position, "", 10));
+}
+
+static void buttonHandler(uint8_t btnId, uint8_t pressed) {
+  if (!menuOpen) {  //only check menu and controls if menu not already open
+    for (uint8_t b = 0; b < 6; b++) {
+      if (pressed && menu[b].contains(t_x, t_y)) {  // Check if any menu coordinate boxes contain the touch coordinates
+        menu[b].press(true);  
+      } else {
+        menu[b].press(false); 
+      }
+    }
+    for (uint8_t b = 0; b<6; b++) { // Check if menu buttons have changed state
+      if (menu[b].justReleased()) {
+        menu[b].drawButton();       // draw invert
+        drawMenu(b);                // redraw text invert
+      }
+      if (menu[b].justPressed()) {
+        menu[b].drawButton(true);   // draw invert
+        drawMenu(b, true);          // redraw text invert
+        menuOpen=b+1;               // 1-indexed
+
+        switch (menuOpen) {
+          case 1: dtostrf(initialDose_mL, 1, 1, numberBuffer); break;
+          case 2: itoa(initialTime_sec, numberBuffer, 10); break;
+          case 3: dtostrf(totalDose_mL, 1, 1, numberBuffer); break;
+          case 4: itoa(steadyTime_sec, numberBuffer, 10); break;
+          case 5: dtostrf(salineFlush_mL, 1, 1, numberBuffer); break;
+          case 6: itoa(salineTime_sec, numberBuffer, 10); break;
+        }
+        numberIndex=0;
+        while (numberBuffer[numberIndex]!=0) numberIndex++;
+
+        drawKeypad();
+      }
+    }
+
+    for (uint8_t b = 0; b < 5; b++) {
+      if (pressed && controls[b].contains(t_x, t_y)) {  // Check if any controls coordinate boxes contain the touch coordinates
+        controls[b].press(true);
+      } else {
+        controls[b].press(false); 
+      }
+    }
+    for (uint8_t b = 0; b < 4; b++) {
+      if (b==0 || b==3) tft.setFreeFont(FSSB24);
+      if (b==1 || b==2) tft.setFreeFont(FSSB12);
+      if (controls[b].justReleased()) {
+        controls[b].drawButton();       // draw invert
+      }
+      if (controls[b].justPressed()) {
+        controls[b].drawButton(true);   // draw invert
+        if (b<4) {
+          digitalWrite(DIR_PIN, b < 2 ? ENDWARD : MOTORWARD);
+          dirMult = digitalRead(DIR_PIN) ? 1 : -1;
+        }
+      }
+      if (controls[b].isPressed()) {
+        if (b==0 || b==3) {
+          doJog(1000);
+        }
+        if (b==1 || b==2) {
+          doJog(100);
+        }
+      } 
+    }
+  }
+
+  
+  if (menuOpen) { // only check keypad if menu is open
+    for (uint8_t b = 0; b < 15; b++) {
+      if (pressed && key[b].contains(t_x, t_y)) { // Check if any key coordinate boxes contain the touch coordinates
+        key[b].press(true);  // tell the button it is pressed
+      } else {
+        key[b].press(false);  // tell the button it is NOT pressed
+      }
+    }
+
+    bool hidden=false;
+    for (uint8_t b = 0; b < 15; b++) {      // Check if any keypad has changed state
+      if (b < 3 || b==14) tft.setFreeFont(LABEL1_FONT);  //handle these in preparation for redrawing
+      else tft.setFreeFont(LABEL2_FONT);
+
+      if (key[b].justReleased()) {
+        if (b != 0 && b!=14) key[b].drawButton();     // draw normal, except exit/send buttons doesn't get redrawn
+      }
+
+      if (key[b].justPressed()) {
+        key[b].drawButton(true);  // draw invert
+
+        if (b >= 3 && b != 14) {
+          if (numberIndex < NUM_LEN) {
+            numberBuffer[numberIndex] = keyLabel[b][0];   // if a numberpad button, append the relevant # to the numberBuffer
+            numberIndex++;
+            numberBuffer[numberIndex] = 0; // zero terminate
+          }
+          status(""); // Clear the old status
+        }
+
+        if (b == 0) { //exit, so hide right half
+          tft.fillRect(241, 0, 240, 320, TFT_BLACK);
+          drawControls();
+          hidden = true;
+          menuOpen = 0;
+        }
+
+        if (b == 1) { // Clear button, so empty number field
+          status("Value cleared");
+          numberIndex = 0; // Reset index to 0
+          numberBuffer[numberIndex] = 0; // Place null in buffer
+        }
+
+        if (b == 2) { // Del button, so delete last char
+          numberBuffer[numberIndex] = 0;
+          if (numberIndex > 0) {          
+            numberIndex--;
+            numberBuffer[numberIndex] = 0;//' ';
+          }
+          status(""); // Clear the old status
+        }
+ 
+        if (b == 14) {  // Send button
+          status("updated value");
+          float num=atof(numberBuffer); // no error checking here, worst case it crashes and reboots, nbd
+          switch (menuOpen) {
+            case 1: initialDose_mL  = num; break;
+            case 2: initialTime_sec = num; break;
+            case 3: totalDose_mL    = num; break;
+            case 4: steadyTime_sec  = num; break;
+            case 5: salineFlush_mL  = num; break;
+            case 6: salineTime_sec  = num; break;
+          }
+          setupDosage();
+          
+
+          tft.fillRect(241, 0, 240, 320, TFT_BLACK);
+          drawControls();
+          hidden = true;
+          menuOpen = 0;
+        }
+      }
+    }
+    
+    if (!hidden) {
+      // Update the number display field
+      tft.setTextDatum(TL_DATUM);        // Use top left corner as text coord datum
+      tft.setFreeFont(&FreeSans18pt7b);  // Choose a nice font that fits box
+      tft.setTextColor(DISP_TCOLOR);     // Set the font colour
+
+      // Draw the string, the value returned is the width in pixels
+      int xwidth = tft.drawString(numberBuffer, DISP_X + 4, DISP_Y + 12);
+
+      // Now cover up the rest of the line up by drawing a black rectangle.  No flicker this way
+      // but it will not work with italic or oblique fonts due to character overlap.
+      tft.fillRect(DISP_X + 4 + xwidth, DISP_Y + 1, DISP_W - xwidth - 5, DISP_H - 2, TFT_BLACK);
+    }
+  }
 }
