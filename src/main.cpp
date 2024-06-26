@@ -118,7 +118,8 @@ void setup() {
   position=0;
   digitalWrite(DIR_PIN, ENDWARD);
   dirMult = digitalRead(DIR_PIN) ? 1 : -1;
-  status(itoa(position, "     ", 10));
+  char temp[10];
+  status(itoa(position, temp, 10));
 }
 
 void loop(void) {
@@ -132,17 +133,9 @@ void administerDose() {
   while (currentSteps < steps[phase]) {
     now = micros();
     if (nextStepTime <= now) {
-      Serial.print(phase);
-      Serial.print(":");
-      Serial.print(now);
-      Serial.print(" > ");
-      Serial.print(nextStepTime);
+      Serial.print(">");
       doStep();
       currentSteps++;
-      Serial.print(" so step ");
-      Serial.print(currentSteps);
-      Serial.print(" to position ");
-      Serial.println(position);
       nextStepTime += delay_us[phase];
     }
   }
@@ -155,13 +148,14 @@ void administerDose() {
 
   phase++;
   currentSteps = 0;
-  if (phase==1) {   // transition immediately from initial to steady
-    startTime = micros();
-    nextStepTime = startTime + steps[phase]; 
-  }
-  if (phase==2) {   // pause at transition to saline so syringe can be swapped
-    startTime = 0;
-  }
+  startTime = 0;
+  // if (phase==1) {   // transition immediately from initial to steady
+  //   startTime = micros();
+  //   nextStepTime = startTime + steps[phase]; 
+  // }
+  // if (phase==2) {   // pause at transition to saline so syringe can be swapped
+  //   startTime = 0;
+  // }
 } 
 
 void drawControls() {
