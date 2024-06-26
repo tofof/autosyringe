@@ -181,7 +181,10 @@ void administerDose() {
   char buffer[50];
   char timeString[10];
   char phaseString[20];
-  sprintf(buffer, "Initial push...");
+  if (phase == 0) {
+    sprintf(buffer, "Initial push...");
+    status(buffer);
+  }
   //digitalWrite(DIR_PIN, MOTORWARD);
 
   while (currentSteps < steps[phase]) {
