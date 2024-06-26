@@ -110,7 +110,6 @@ int phase = 0;
 
 
 void setup() {
-  Serial.begin(115200);
   setupScreen();
   delay(1000);
   pinMode(STEP_PIN, OUTPUT);
@@ -191,11 +190,10 @@ void administerDose() {
       ringMeter(480*3/4, 320/2, 480/6, progress); // Draw analogue meter
     }
     if (nextStepTime <= now) {
-      Serial.print(">");
       doStep();
       currentSteps++;
       nextStepTime += delay_us[phase];
-    }
+    } else yield(); // 8266 will crash if loop is blocked for too long
   }
   float timeTaken = (micros() - startTime) / 1e6;
   char buffer[20];
