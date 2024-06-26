@@ -1,6 +1,7 @@
 #include <arduino.h>
 
 typedef unsigned long millis_t; //unless defined elsewhere
+typedef unsigned long micros_t; //unless defined elsewhere
 
 #include <debounce.h>
 static void buttonHandler(uint8_t, uint8_t);
@@ -10,7 +11,6 @@ static Button touch(0, buttonHandler);
 #include <SPI.h>
 #include <TFT_eSPI.h>      // Hardware-specific library
 #include "Free_Fonts.h" 
-TFT_eSPI tft = TFT_eSPI(); 
 #define CALIBRATION_FILE "/TouchCalData2"
 #define REPEAT_CAL false
 #define TFT_ROTATION 3 //0-3
@@ -33,6 +33,7 @@ TFT_eSPI tft = TFT_eSPI();
 #define DISP_TSIZE 3
 #define DISP_TCOLOR TFT_CYAN
 #define NUM_LEN 12
+TFT_eSPI tft = TFT_eSPI(); 
 char numberBuffer[NUM_LEN + 1] = "";
 uint8_t numberIndex = 0;
 char keyLabel[15][6] = {"Exit", "Clear", "<--", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "Send" };
@@ -63,8 +64,11 @@ void status(const char*);
 #define MOTORWARD false
 #define STEPS_PER_MM 320  // with m12 on 00, it's 160 steps per 0.5 mm, 320 steps per 1 mm, or 32 steps per 0.1 mm = 1 dmm
 int dirMult = 0;
-bool shouldStep = false;
 int16_t position = 0;
+int16_t currentSteps = 0;
+micros_t startTime = 0;
+micros_t nextStepTime = 0;
+void administerDose();
 void doStep();
 void doJog(int);
 
@@ -88,6 +92,10 @@ float salineFlush_mL = 2.0;
 int salineSteps = salineFlush_mL * steps_per_mL;
 int salineTime_sec = 20; // time per 0.1 mL after the first 0.5 mL of saline (which is really the last 0.5 of dose)
 int salineDelay_us = salineTime_sec * 1e6 / (0.1 * steps_per_mL);
+int steps[3] = {initialSteps, steadySteps, salineSteps};
+int delay_us[3] = {initialDelay_us, steadyDelay_us, salineDelay_us};
+int phase = 0;
+
 
 // initialDelay_us is on the order of 4000, ie 4ms, so we should probably do a 'nextStepTime' in micros that we schedule and check against
 // largest value you can use with delayMicroseconds is 16383
@@ -97,10 +105,8 @@ int salineDelay_us = salineTime_sec * 1e6 / (0.1 * steps_per_mL);
 // like `while (micros() > curStep * initialDelay_us + start_us) {step(); curStep++;} and do FIXED NOT VARIABLE 40us between the two step pieces
 
 
-
-
-
 void setup() {
+  Serial.begin(115200);
   setupScreen();
   delay(1000);
   pinMode(STEP_PIN, OUTPUT);
@@ -115,13 +121,48 @@ void setup() {
   status(itoa(position, "     ", 10));
 }
 
-
-
 void loop(void) {
   if (tft.getTouchRawZ() > 100) { bool pressed = tft.getTouch(&t_x, &t_y); touch.update((uint8)pressed);} 
-  if (shouldStep) doStep();
+  if (startTime) administerDose(); // lock-in on just administering dose, quit doing slow touchscreen reads
   else delay(5);
 }
+
+void administerDose() {
+  micros_t now;
+  while (currentSteps < steps[phase]) {
+    now = micros();
+    if (nextStepTime <= now) {
+      Serial.print(phase);
+      Serial.print(":");
+      Serial.print(now);
+      Serial.print(" > ");
+      Serial.print(nextStepTime);
+      doStep();
+      currentSteps++;
+      Serial.print(" so step ");
+      Serial.print(currentSteps);
+      Serial.print(" to position ");
+      Serial.println(position);
+      nextStepTime += delay_us[phase];
+    }
+  }
+  float timeTaken = (micros() - startTime) / 1e6;
+  char buffer[20];
+  char timeString[10];
+  dtostrf(timeTaken, 3, 1, timeString);
+  sprintf(buffer, "Finished in %s sec.", timeString);
+  status(buffer);
+
+  phase++;
+  currentSteps = 0;
+  if (phase==1) {   // transition immediately from initial to steady
+    startTime = micros();
+    nextStepTime = startTime + steps[phase]; 
+  }
+  if (phase==2) {   // pause at transition to saline so syringe can be swapped
+    startTime = 0;
+  }
+} 
 
 void drawControls() {
   controls[0].initButton(&tft, 480*7/12, 32, 54, 54, TFT_WHITE, TFT_RED, TFT_WHITE, "<", 1);
@@ -136,7 +177,6 @@ void drawControls() {
   tft.setFreeFont(FSSB12);
   controls[1].drawButton();
   controls[2].drawButton();
-  
 }
 
 void drawMenu(int row=-1, bool invert=false) {
@@ -272,6 +312,12 @@ void setupDosage(/*int syringeSize*/) {
   steadyDelay_us = steadyTime_sec * 1e6 / (0.1 * steps_per_mL);
   salineSteps = salineFlush_mL * steps_per_mL;
   salineDelay_us = salineTime_sec * 1e6 / (0.1 * steps_per_mL);
+  steps[0] = initialSteps;
+  steps[1] = steadySteps;
+  steps[2] = salineSteps;
+  delay_us[0] = initialDelay_us;
+  delay_us[1] = steadyDelay_us;
+  delay_us[2] = salineDelay_us;
 }
 
 void setupMenuButtons() {
@@ -391,7 +437,9 @@ void doJog(int steps) {
 }
 
 static void buttonHandler(uint8_t btnId, uint8_t pressed) {
+  // MENU & CONTROLS
   if (!menuOpen) {  //only check menu and controls if menu not already open
+    // MENU
     for (uint8_t b = 0; b < 6; b++) {
       if (pressed && menu[b].contains(t_x, t_y)) {  // Check if any menu coordinate boxes contain the touch coordinates
         menu[b].press(true);  
@@ -424,6 +472,7 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
       }
     }
 
+    // CONTROLS
     for (uint8_t b = 0; b < 5; b++) {
       if (pressed && controls[b].contains(t_x, t_y)) {  // Check if any controls coordinate boxes contain the touch coordinates
         controls[b].press(true);
@@ -431,8 +480,8 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
         controls[b].press(false); 
       }
     }
-    for (uint8_t b = 0; b < 4; b++) {
-      if (b==0 || b==3) tft.setFreeFont(FSSB24);
+    for (uint8_t b = 0; b < 5; b++) {
+      if (b==0 || b==3 || b==4) tft.setFreeFont(FSSB24);
       if (b==1 || b==2) tft.setFreeFont(FSSB12);
       if (controls[b].justReleased()) {
         controls[b].drawButton();       // draw invert
@@ -442,6 +491,12 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
         if (b<4) {
           digitalWrite(DIR_PIN, b < 2 ? ENDWARD : MOTORWARD);
           dirMult = digitalRead(DIR_PIN) ? 1 : -1;
+        }
+        if (b==4) {
+          startTime = micros();
+          nextStepTime = micros();
+          currentSteps = 0;
+          phase = 0;
         }
       }
       if (controls[b].isPressed()) {
@@ -454,9 +509,10 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
       } 
     }
   }
-
   
+  // KEYPAD & FIELD
   if (menuOpen) { // only check keypad if menu is open
+    //KEYPAD
     for (uint8_t b = 0; b < 15; b++) {
       if (pressed && key[b].contains(t_x, t_y)) { // Check if any key coordinate boxes contain the touch coordinates
         key[b].press(true);  // tell the button it is pressed
@@ -464,7 +520,6 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
         key[b].press(false);  // tell the button it is NOT pressed
       }
     }
-
     bool hidden=false;
     for (uint8_t b = 0; b < 15; b++) {      // Check if any keypad has changed state
       if (b < 3 || b==14) tft.setFreeFont(LABEL1_FONT);  //handle these in preparation for redrawing
@@ -529,7 +584,8 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
         }
       }
     }
-    
+
+    // NUMBER FIELD    
     if (!hidden) {
       // Update the number display field
       tft.setTextDatum(TL_DATUM);        // Use top left corner as text coord datum
