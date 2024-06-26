@@ -28,7 +28,7 @@ static Button touch(0, buttonHandler);
 #define DISP_Y 10
 #define DISP_W 238
 #define DISP_H 50
-#define STATUS_X 375 // Centered on this
+#define STATUS_X 360 // Centered on this
 #define STATUS_Y 65
 #define DISP_TSIZE 3
 #define DISP_TCOLOR TFT_CYAN
@@ -58,7 +58,8 @@ void drawMenu(int, bool);
 void status(const char*);
 
 // Ring meter
-#define DARKER_GREY 0x18E3
+//#define DARKER_GREY 0x18E3
+#define DARKER_GREY 0x0
 void ringMeter(int, int, int, int);
 bool initMeter = true;
 
@@ -89,25 +90,19 @@ int initialTime_sec = 30;
 int initialDelay_us = initialTime_sec * 1e6 / initialSteps;
 float totalDose_mL = 2.5;
 float plungerDose_mL = totalDose_mL - 0.5;
-float steadyDose_mL = plungerDose_mL - initialDose_mL;
+float steadyDose_mL = plungerDose_mL - initialDose_mL; //infusion dose from first syringe
 int steadySteps = steadyDose_mL * steps_per_mL;
 int steadyTime_sec = 60; // time per 0.1 mL
 int steadyDelay_us = steadyTime_sec * 1e6 / (0.1 * steps_per_mL);
+float transitionDose_mL = 0.5; //infusion dose in butterfly, administered by second syringe
+int transitionSteps = transitionDose_mL * steps_per_mL;
 float salineFlush_mL = 2.0;
-int salineSteps = salineFlush_mL * steps_per_mL;
+int salineSteps = salineFlush_mL * steps_per_mL - transitionSteps; //portion of second syringe that is just saline
 int salineTime_sec = 20; // time per 0.1 mL after the first 0.5 mL of saline (which is really the last 0.5 of dose)
 int salineDelay_us = salineTime_sec * 1e6 / (0.1 * steps_per_mL);
-int steps[3] = {initialSteps, steadySteps, salineSteps};
-int delay_us[3] = {initialDelay_us, steadyDelay_us, salineDelay_us};
+int steps[4] = {initialSteps, steadySteps, transitionSteps, salineSteps};
+int delay_us[4] = {initialDelay_us, steadyDelay_us, steadyDelay_us, salineDelay_us}; // transitionDelay is steadyDelay
 int phase = 0;
-
-// initialDelay_us is on the order of 4000, ie 4ms, so we should probably do a 'nextStepTime' in micros that we schedule and check against
-// largest value you can use with delayMicroseconds is 16383
-// and of course we will be fighting other execution times like drawing the screen :(
-// might need https://github.com/DrDiettrich/ALib0/blob/master/examples/MultipleTasks/MultipleTasks.ino or something like it to deal with the problem
-// or might need to calculate moment of go, keep it stored, count steps, and calculate current next step time so we can take more than one step in a row to 'catch up'
-// like `while (micros() > curStep * initialDelay_us + start_us) {step(); curStep++;} and do FIXED NOT VARIABLE 40us between the two step pieces
-
 
 void setup() {
   setupScreen();
@@ -155,7 +150,7 @@ void ringMeter(int x, int y, int r, int val)
 
 
   if (last_angle != val_angle) {
-    tft.setTextPadding(5);
+    tft.setTextPadding(100);
     tft.setCursor(STATUS_X, STATUS_Y);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     tft.setFreeFont(FSSB24);
@@ -183,11 +178,17 @@ void ringMeter(int x, int y, int r, int val)
 
 void administerDose() {
   micros_t now;
+  char buffer[50];
+  char timeString[10];
+  char phaseString[20];
+  sprintf(buffer, "Initial push...");
+  //digitalWrite(DIR_PIN, MOTORWARD);
+
   while (currentSteps < steps[phase]) {
     now = micros();
     if (currentSteps % 10 == 0) {
       int progress = currentSteps * 100 / steps[phase];
-      ringMeter(480*3/4, 320/2, 480/6, progress); // Draw analogue meter
+      ringMeter(480*3/4, 320*3/5, 480/6, progress); // Draw analogue meter
     }
     if (nextStepTime <= now) {
       doStep();
@@ -195,23 +196,30 @@ void administerDose() {
       nextStepTime += delay_us[phase];
     } else yield(); // 8266 will crash if loop is blocked for too long
   }
+
   float timeTaken = (micros() - startTime) / 1e6;
-  char buffer[20];
-  char timeString[10];
+  switch (phase) {
+    case 0: sprintf(phaseString, "Initial push"); break;
+    case 1: sprintf(phaseString, "Infusion"); break;
+    case 2: sprintf(phaseString, "Infusion tail"); break;
+    case 3: sprintf(phaseString, "Saline flush"); break;
+  }
   dtostrf(timeTaken, 3, 1, timeString);
-  sprintf(buffer, "Finished in %s sec.", timeString);
+  sprintf(buffer, "%s finished in %s sec.", phaseString, timeString);
   status(buffer);
 
   phase++;
   currentSteps = 0;
   startTime = 0;
-  // if (phase==1) {   // transition immediately from initial to steady
-  //   startTime = micros();
-  //   nextStepTime = startTime + steps[phase]; 
-  // }
-  // if (phase==2) {   // pause at transition to saline so syringe can be swapped
-  //   startTime = 0;
-  // }
+  if (phase==1) {   // transition immediately from initial to steady
+    startTime = micros();
+    nextStepTime = startTime + steps[phase]; 
+  }
+  if (phase==2) {   // pause at transition to saline so syringe can be swapped
+    startTime = 0;
+    // note that nextStepTime during this phase should really be 2 different values, for first 0.5 mL it should be phase 1's
+    // so almost certainly we actually want 4 phases: initial, steady, pause to switch to saline and then transitional 0.5 mL, then the saline-only flush after 0.5 mL
+  }
 } 
 
 void drawControls() {
@@ -269,7 +277,7 @@ void drawMenu(int row=-1, bool invert=false) {
     tft.drawString("Dose", 4, y-18, GFXFF);
     tft.setTextDatum(TL_DATUM);
     tft.setTextFont(GLCD);
-    int offset = tft.drawString("Plunger should read: ", 4, y-17, GFXFF);
+    int offset = tft.drawString("plunger should read ", 4, y-17, GFXFF);
     offset += tft.drawFloat(plungerDose_mL, 1, 4+offset, y-17, GFXFF);
     tft.drawString(" mL", 4+offset, y-17, GFXFF);
     tft.setTextDatum(BR_DATUM);
@@ -305,7 +313,7 @@ void drawMenu(int row=-1, bool invert=false) {
     tft.drawString("Saline Flush", 4, y-18, GFXFF);
     tft.setTextDatum(TL_DATUM);
     tft.setTextFont(GLCD);
-    tft.drawString("(true plunger reading)", 4, y-17, GFXFF);
+    tft.drawString("true plunger reading", 4, y-17, GFXFF);
     tft.setTextDatum(BR_DATUM);
     tft.setFreeFont(MENU1_FONT);
     tft.drawFloat(salineFlush_mL, 1, 210, y-11, GFXFF);
@@ -360,14 +368,17 @@ void setupDosage(/*int syringeSize*/) {
   steadyDose_mL = plungerDose_mL - initialDose_mL;
   steadySteps = steadyDose_mL * steps_per_mL;
   steadyDelay_us = steadyTime_sec * 1e6 / (0.1 * steps_per_mL);
+  salineSteps = salineFlush_mL * steps_per_mL - transitionSteps; //portion of second syringe that is just saline
   salineSteps = salineFlush_mL * steps_per_mL;
   salineDelay_us = salineTime_sec * 1e6 / (0.1 * steps_per_mL);
   steps[0] = initialSteps;
   steps[1] = steadySteps;
-  steps[2] = salineSteps;
+  steps[2] = transitionSteps;
+  steps[3] = salineSteps;
   delay_us[0] = initialDelay_us;
   delay_us[1] = steadyDelay_us;
-  delay_us[2] = salineDelay_us;
+  delay_us[2] = steadyDelay_us; //transition continues to use steadyDelay
+  delay_us[3] = salineDelay_us;
 }
 
 void setupMenuButtons() {
