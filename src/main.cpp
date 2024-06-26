@@ -57,6 +57,11 @@ void drawControls();
 void drawMenu(int, bool);
 void status(const char*);
 
+// Ring meter
+#define DARKER_GREY 0x18E3
+void ringMeter(int, int, int, int, const char *);
+bool initMeter = true;
+
 // Stepper (TMC2208)
 #define DIR_PIN   4    // Direction
 #define STEP_PIN  5     // Step
@@ -96,7 +101,6 @@ int steps[3] = {initialSteps, steadySteps, salineSteps};
 int delay_us[3] = {initialDelay_us, steadyDelay_us, salineDelay_us};
 int phase = 0;
 
-
 // initialDelay_us is on the order of 4000, ie 4ms, so we should probably do a 'nextStepTime' in micros that we schedule and check against
 // largest value you can use with delayMicroseconds is 16383
 // and of course we will be fighting other execution times like drawing the screen :(
@@ -128,10 +132,65 @@ void loop(void) {
   else delay(5);
 }
 
+// #########################################################################
+//  Draw the meter on the screen, returns x coord of right-hand side
+// #########################################################################
+// x,y is centre of meter, r the radius, val a number in range 0-100
+// units is the meter scale label
+void ringMeter(int x, int y, int r, int val, const char *units)
+{
+  static uint16_t last_angle = 30;
+
+  if (initMeter) {
+    initMeter = false;
+    last_angle = 30;
+    tft.fillCircle(x, y, r, DARKER_GREY);
+    tft.drawSmoothCircle(x, y, r, TFT_SILVER, DARKER_GREY);
+    uint16_t tmp = r - 3;
+    tft.drawArc(x, y, tmp, tmp - tmp / 5, last_angle, 330, TFT_BLACK, DARKER_GREY);
+  }
+
+  r -= 3;
+
+  // Range here is 0-100 so value is scaled to an angle 30-330
+  int val_angle = map(val, 0, 100, 30, 330);
+
+
+  if (last_angle != val_angle) {
+    tft.setTextPadding(5);
+    tft.setCursor(STATUS_X, STATUS_Y);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setFreeFont(FSSB24);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextSize(1);
+    char buffer[5]; 
+    sprintf(buffer, "%d%%", val);
+    tft.drawString(buffer, x, y);
+    tft.setTextPadding(0);
+
+    // Allocate a value to the arc thickness dependant of radius
+    uint8_t thickness = r / 5;
+    if ( r < 25 ) thickness = r / 3;
+
+    // Update the arc, only the zone between last_angle and new val_angle is updated
+    if (val_angle > last_angle) {
+      tft.drawArc(x, y, r, r - thickness, last_angle, val_angle, TFT_SKYBLUE, TFT_BLACK); // TFT_SKYBLUE random(0x10000)
+    }
+    else {
+      tft.drawArc(x, y, r, r - thickness, val_angle, last_angle, TFT_BLACK, DARKER_GREY);
+    }
+    last_angle = val_angle; // Store meter arc position for next redraw
+  }
+}
+
 void administerDose() {
   micros_t now;
   while (currentSteps < steps[phase]) {
     now = micros();
+    if (currentSteps % 25 == 0) {
+      int progress = currentSteps * 100 / steps[phase];
+      ringMeter(480*3/4, 320/2, 480/6, progress, "Progress"); // Draw analogue meter
+    }
     if (nextStepTime <= now) {
       Serial.print(">");
       doStep();
@@ -478,7 +537,7 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
       if (b==0 || b==3 || b==4) tft.setFreeFont(FSSB24);
       if (b==1 || b==2) tft.setFreeFont(FSSB12);
       if (controls[b].justReleased()) {
-        controls[b].drawButton();       // draw invert
+        if (b != 4) controls[b].drawButton();       // draw regular, but start never needs to be redrawn once pressed
       }
       if (controls[b].justPressed()) {
         controls[b].drawButton(true);   // draw invert
@@ -491,6 +550,7 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
           nextStepTime = micros();
           currentSteps = 0;
           phase = 0;
+          tft.fillRect(241, 0, 240, 320, TFT_BLACK);
         }
       }
       if (controls[b].isPressed()) {
