@@ -59,7 +59,7 @@ void status(const char*);
 
 // Ring meter
 #define DARKER_GREY 0x18E3
-void ringMeter(int, int, int, int, const char *);
+void ringMeter(int, int, int, int);
 bool initMeter = true;
 
 // Stepper (TMC2208)
@@ -136,8 +136,7 @@ void loop(void) {
 //  Draw the meter on the screen, returns x coord of right-hand side
 // #########################################################################
 // x,y is centre of meter, r the radius, val a number in range 0-100
-// units is the meter scale label
-void ringMeter(int x, int y, int r, int val, const char *units)
+void ringMeter(int x, int y, int r, int val)
 {
   static uint16_t last_angle = 30;
 
@@ -174,7 +173,7 @@ void ringMeter(int x, int y, int r, int val, const char *units)
 
     // Update the arc, only the zone between last_angle and new val_angle is updated
     if (val_angle > last_angle) {
-      tft.drawArc(x, y, r, r - thickness, last_angle, val_angle, TFT_SKYBLUE, TFT_BLACK); // TFT_SKYBLUE random(0x10000)
+      tft.drawArc(x, y, r, r - thickness, last_angle, val_angle, TFT_SKYBLUE, TFT_BLACK); 
     }
     else {
       tft.drawArc(x, y, r, r - thickness, val_angle, last_angle, TFT_BLACK, DARKER_GREY);
@@ -187,9 +186,9 @@ void administerDose() {
   micros_t now;
   while (currentSteps < steps[phase]) {
     now = micros();
-    if (currentSteps % 25 == 0) {
+    if (currentSteps % 10 == 0) {
       int progress = currentSteps * 100 / steps[phase];
-      ringMeter(480*3/4, 320/2, 480/6, progress, "Progress"); // Draw analogue meter
+      ringMeter(480*3/4, 320/2, 480/6, progress); // Draw analogue meter
     }
     if (nextStepTime <= now) {
       Serial.print(">");
