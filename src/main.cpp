@@ -46,6 +46,7 @@ uint16_t keyColor[15] = {TFT_RED, TFT_DARKGREY, TFT_DARKGREY,
 TFT_eSPI_Button key[15];
 TFT_eSPI_Button menu[6];
 TFT_eSPI_Button controls[12];
+TFT_eSPI_Button retract;
 uint16_t t_x = 0, t_y = 0;
 #define MENU1_FONT  FSSB12  // Menu item large
 int menuOpen = 0; //1-indexed
@@ -76,14 +77,17 @@ micros_t startTime = 0;
 micros_t nextStepTime = 0;
 void administerDose();
 void doStep();
-void doJog(int);
+void doJog(uint16_t);
+void jogToPosition(uint16_t);
 
 // Medicine
 void setupDosage(/*int*/);
+void syringeChange();
 #define MAX_SYRINGE 21   // one larger than max syringe size in mL
                          // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19  20          Syringe total mL
 const float mm_per_mL[21]={ 0, 0, 0,16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int steps_per_mL = STEPS_PER_MM * mm_per_mL[3];
+int plungerOffset_mL = 0.2; //offset because zero position would require plunger to be inserted more than 100% into syringe
 float initialDose_mL = 1.1;
 int initialSteps = initialDose_mL * steps_per_mL;
 int initialTime_sec = 30;
@@ -111,13 +115,12 @@ void setup() {
   pinMode(DIR_PIN, OUTPUT);
   digitalWrite(STEP_PIN, LOW);
   digitalWrite(DIR_PIN, MOTORWARD);
-  setupDosage();
-  doJog(20000);
-  position=0;
-  digitalWrite(DIR_PIN, ENDWARD);
   dirMult = digitalRead(DIR_PIN) ? 1 : -1;
+  doJog(5000);
+  position=0;
   char temp[10];
   status(itoa(position, temp, 10));
+  setupDosage();
 }
 
 void loop(void) {
@@ -185,7 +188,7 @@ void administerDose() {
     sprintf(buffer, "Initial push...");
     status(buffer);
   }
-  //digitalWrite(DIR_PIN, MOTORWARD);
+  digitalWrite(DIR_PIN, MOTORWARD);
 
   while (currentSteps < steps[phase]) {
     now = micros();
@@ -220,10 +223,27 @@ void administerDose() {
   }
   if (phase==2) {   // pause at transition to saline so syringe can be swapped
     startTime = 0;
-    // note that nextStepTime during this phase should really be 2 different values, for first 0.5 mL it should be phase 1's
-    // so almost certainly we actually want 4 phases: initial, steady, pause to switch to saline and then transitional 0.5 mL, then the saline-only flush after 0.5 mL
+    syringeChange();
+  }
+  if (phase==3) {   // transition immediately from dose/saline transition to remaining saline flush
+    startTime = micros();
+    nextStepTime = startTime + steps[phase]; 
   }
 } 
+
+void syringeChange() {
+    tft.fillRect(480*3/4-480/6, 320*3/5-480/6, 480/3, 480/3, TFT_BLACK); // blank ringmeter
+    tft.fillRect(241, 90, 240, 140, TFT_RED); //red warning
+    tft.setFreeFont(MENU1_FONT);
+    tft.setTextDatum(TC_DATUM);
+    tft.setTextColor(TFT_YELLOW, TFT_RED);
+    tft.drawString("REMOVE SYRINGE", 480*3/4, 165, GFXFF);
+    tft.drawString("before retracting", 480*3/4, 195, GFXFF);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    retract.initButton(&tft, 480*3/4, 120, 110, 36, TFT_WHITE, TFT_GOLD, TFT_WHITE, "Retract", 1);
+    tft.setFreeFont(FSSB12);
+    retract.drawButton();
+}
 
 void drawControls() {
   controls[0].initButton(&tft, 480*7/12, 32, 54, 54, TFT_WHITE, TFT_RED, TFT_WHITE, "<", 1);
@@ -231,6 +251,7 @@ void drawControls() {
   controls[2].initButton(&tft, 480*77/96, 32, 30, 30, TFT_WHITE, TFT_GREEN, TFT_WHITE, ">", 1);
   controls[3].initButton(&tft, 480*11/12, 32, 54, 54, TFT_WHITE, TFT_GREEN, TFT_WHITE, ">", 1);
   controls[4].initButton(&tft, 480*3/4, 200, 200, 54, TFT_WHITE, TFT_BLUE, TFT_WHITE, "Start", 1);
+  
   tft.setFreeFont(FSSB24);
   controls[0].drawButton();
   controls[3].drawButton();
@@ -372,7 +393,6 @@ void setupDosage(/*int syringeSize*/) {
   steadySteps = steadyDose_mL * steps_per_mL;
   steadyDelay_us = steadyTime_sec * 1e6 / (0.1 * steps_per_mL);
   salineSteps = salineFlush_mL * steps_per_mL - transitionSteps; //portion of second syringe that is just saline
-  salineSteps = salineFlush_mL * steps_per_mL;
   salineDelay_us = salineTime_sec * 1e6 / (0.1 * steps_per_mL);
   steps[0] = initialSteps;
   steps[1] = steadySteps;
@@ -382,6 +402,7 @@ void setupDosage(/*int syringeSize*/) {
   delay_us[1] = steadyDelay_us;
   delay_us[2] = steadyDelay_us; //transition continues to use steadyDelay
   delay_us[3] = salineDelay_us;
+  jogToPosition((plungerDose_mL+plungerOffset_mL) * steps_per_mL);
 }
 
 void setupMenuButtons() {
@@ -487,17 +508,27 @@ void doStep() {
   position += dirMult;
 }
 
-void doJog(int steps) {
+void doJog(u_int16_t steps) {
   for (int i=0; i<steps; i++) {
     digitalWrite(STEP_PIN, HIGH);
     delayMicroseconds(50);
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(50);
+    if (steps % 5000 == 0) yield();
   }
   position += dirMult * steps;
   position = max(0, (int)position);
   position = min(26400, (int)position);
   status(itoa(position, "", 10));
+}
+
+void jogToPosition(uint16_t target) {
+  int steps = target - position;
+  status(itoa(steps, "", 10));
+  digitalWrite(DIR_PIN, (steps > 0) ? ENDWARD : MOTORWARD);
+  dirMult = digitalRead(DIR_PIN) ? 1 : -1;
+  yield();
+  doJog(abs(steps));
 }
 
 static void buttonHandler(uint8_t btnId, uint8_t pressed) {
@@ -537,6 +568,19 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
     }
 
     // CONTROLS
+    if (phase == 2) {
+      if (pressed && retract.contains(t_x, t_y)) {  // Check if any controls coordinate boxes contain the touch coordinates
+        retract.press(true);
+      } else {
+        retract.press(false); 
+      }
+      if (retract.justPressed()) {
+        jogToPosition(salineFlush_mL * steps_per_mL);
+        tft.fillRect(241, 0, 240, 320, TFT_BLACK);
+        drawControls();
+        status("Finishing dose...");
+      }
+    }
     for (uint8_t b = 0; b < 5; b++) {
       if (pressed && controls[b].contains(t_x, t_y)) {  // Check if any controls coordinate boxes contain the touch coordinates
         controls[b].press(true);
@@ -560,7 +604,6 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
           startTime = micros();
           nextStepTime = micros();
           currentSteps = 0;
-          phase = 0;
           tft.fillRect(241, 0, 240, 320, TFT_BLACK);
         }
       }
