@@ -7,6 +7,7 @@ typedef unsigned long micros_t; //unless defined elsewhere
 static void buttonHandler(uint8_t, uint8_t);
 static Button touch(0, buttonHandler);
 
+// Screen - see also config in platformio.ini
 #include "FS.h"
 #include <SPI.h>
 #include <TFT_eSPI.h>      // Hardware-specific library
@@ -59,14 +60,13 @@ void drawMenu(int, bool);
 void status(const char*);
 
 // Ring meter
-//#define DARKER_GREY 0x18E3
-#define DARKER_GREY 0x0
+#define DARKER_GREY 0x0 //0x18E3
 void ringMeter(int, int, int, int);
 bool initMeter = true;
 
 // Stepper (TMC2208)
-#define DIR_PIN   4    // Direction
-#define STEP_PIN  5     // Step
+#define DIR_PIN   2    // Direction
+#define STEP_PIN  4     // Step
 #define ENDWARD true
 #define MOTORWARD false
 #define STEPS_PER_MM 320  // with m12 on 00, it's 160 steps per 0.5 mm, 320 steps per 1 mm, or 32 steps per 0.1 mm = 1 dmm
@@ -108,11 +108,16 @@ int steps[4] = {initialSteps, steadySteps, transitionSteps, salineSteps};
 int delay_us[4] = {initialDelay_us, steadyDelay_us, steadyDelay_us, salineDelay_us}; // transitionDelay is steadyDelay
 int phase = 0;
 
+// Piezo Buzzer
+#define PIEZO_PIN   5
+
 void setup() {
   setupScreen();
   delay(1000);
+  pinMode(PIEZO_PIN, OUTPUT);
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
+  digitalWrite(PIEZO_PIN, LOW); 
   digitalWrite(STEP_PIN, LOW);
   digitalWrite(DIR_PIN, MOTORWARD);
   dirMult = digitalRead(DIR_PIN) ? 1 : -1;
@@ -121,6 +126,7 @@ void setup() {
   char temp[10];
   status(itoa(position, temp, 10));
   setupDosage();
+  
 }
 
 void loop(void) {
@@ -232,6 +238,7 @@ void administerDose() {
 } 
 
 void syringeChange() {
+    digitalWrite(PIEZO_PIN, HIGH);
     tft.fillRect(480*3/4-480/6, 320*3/5-480/6, 480/3, 480/3, TFT_BLACK); // blank ringmeter
     tft.fillRect(241, 90, 240, 140, TFT_RED); //red warning
     tft.setFreeFont(MENU1_FONT);
@@ -243,6 +250,8 @@ void syringeChange() {
     retract.initButton(&tft, 480*3/4, 120, 110, 36, TFT_WHITE, TFT_GOLD, TFT_WHITE, "Retract", 1);
     tft.setFreeFont(FSSB12);
     retract.drawButton();
+    delay(1000);
+    digitalWrite(PIEZO_PIN, LOW);
 }
 
 void drawControls() {
