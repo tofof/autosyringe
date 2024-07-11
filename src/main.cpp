@@ -121,12 +121,11 @@ void setup() {
   digitalWrite(STEP_PIN, LOW);
   digitalWrite(DIR_PIN, MOTORWARD);
   dirMult = digitalRead(DIR_PIN) ? 1 : -1;
-  doJog(5000);
+  doJog(20000);
   position=0;
   char temp[10];
   status(itoa(position, temp, 10));
   setupDosage();
-  
 }
 
 void loop(void) {
@@ -249,17 +248,20 @@ void syringeChange() {
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     retract.initButton(&tft, 480*3/4, 120, 110, 36, TFT_WHITE, TFT_GOLD, TFT_WHITE, "Retract", 1);
     tft.setFreeFont(FSSB12);
+    controls[4].initButton(&tft, 500, 500, 1, 1, TFT_WHITE, TFT_BLUE, TFT_WHITE, "Start", 1);  //disable start
     retract.drawButton();
     delay(1000);
     digitalWrite(PIEZO_PIN, LOW);
 }
 
 void drawControls() {
+  char label[8];
+  sprintf(label, (phase==2) ? "Resume" : "Start");
   controls[0].initButton(&tft, 480*7/12, 32, 54, 54, TFT_WHITE, TFT_RED, TFT_WHITE, "<", 1);
   controls[1].initButton(&tft, 480*67/96, 32, 30, 30, TFT_WHITE, TFT_RED, TFT_WHITE, "<", 1);
   controls[2].initButton(&tft, 480*77/96, 32, 30, 30, TFT_WHITE, TFT_GREEN, TFT_WHITE, ">", 1);
   controls[3].initButton(&tft, 480*11/12, 32, 54, 54, TFT_WHITE, TFT_GREEN, TFT_WHITE, ">", 1);
-  controls[4].initButton(&tft, 480*3/4, 200, 200, 54, TFT_WHITE, TFT_BLUE, TFT_WHITE, "Start", 1);
+  controls[4].initButton(&tft, 480*3/4, 200, 200, 54, TFT_WHITE, TFT_BLUE, TFT_WHITE, label, 1);
   
   tft.setFreeFont(FSSB24);
   controls[0].drawButton();
@@ -587,7 +589,6 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
         jogToPosition(salineFlush_mL * steps_per_mL);
         tft.fillRect(241, 0, 240, 320, TFT_BLACK);
         drawControls();
-        status("Finishing dose...");
       }
     }
     for (uint8_t b = 0; b < 5; b++) {
@@ -614,6 +615,7 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
           nextStepTime = micros();
           currentSteps = 0;
           tft.fillRect(241, 0, 240, 320, TFT_BLACK);
+          if (phase==2) status("Finishing dose...");
         }
       }
       if (controls[b].isPressed()) {
