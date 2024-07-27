@@ -1,5 +1,6 @@
 #include <arduino.h>
 
+
 typedef unsigned long millis_t; //unless defined elsewhere
 typedef unsigned long micros_t; //unless defined elsewhere
 
@@ -13,7 +14,7 @@ static Button touch(0, buttonHandler);
 #include <TFT_eSPI.h>      // Hardware-specific library
 #include "Free_Fonts.h" 
 #define CALIBRATION_FILE "/TouchCalData2"
-#define REPEAT_CAL false
+#define REPEAT_CAL true
 #define TFT_ROTATION 3 //0-3
 #define KEY_X 280 // Centre of key
 #define KEY_Y 96
@@ -111,27 +112,47 @@ int phase = 0;
 // Piezo Buzzer
 #define PIEZO_PIN   5
 
+// Battery
+#include <Battery.h>
+#define SENSE_PIN A0
+Battery batt = Battery(9900, 12300, SENSE_PIN);
+
 void setup() {
-  setupScreen();
-  delay(1000);
+  Serial.begin(115200);
+  Serial.println("Setup Start");
+  //setupScreen();
+  
+  //delay(1000);
   pinMode(PIEZO_PIN, OUTPUT);
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
+  pinMode(SENSE_PIN, INPUT);
   digitalWrite(PIEZO_PIN, LOW); 
   digitalWrite(STEP_PIN, LOW);
   digitalWrite(DIR_PIN, MOTORWARD);
   dirMult = digitalRead(DIR_PIN) ? 1 : -1;
-  doJog(20000);
-  position=0;
-  char temp[10];
-  status(itoa(position, temp, 10));
-  setupDosage();
+  // doJog(20000);
+  // position=0;
+  // char temp[10];
+  // status(itoa(position, temp, 10));
+  // setupDosage();
+  batt.begin(3300, 3.88); //3.3 v adc = 3300, resistor ratio (22k + 6.8k + 10k) / 10k = 2.88 
+  Serial.println("Setup Done");
 }
 
 void loop(void) {
-  if (tft.getTouchRawZ() > 100) { bool pressed = tft.getTouch(&t_x, &t_y); touch.update((uint8)pressed);} 
-  if (startTime) administerDose(); // lock-in on just administering dose, quit doing slow touchscreen reads
-  else delay(5);
+  // if (tft.getTouchRawZ() > 100) { bool pressed = tft.getTouch(&t_x, &t_y); touch.update((uint8)pressed);} 
+  // if (startTime) administerDose(); // lock-in on just administering dose, quit doing slow touchscreen reads
+  // else delay(5);
+  Serial.print("    ADC is ");
+  Serial.print(analogRead(SENSE_PIN));
+  Serial.print("            ");
+  Serial.print("Battery voltage is ");
+	Serial.print(batt.voltage());
+	Serial.print(" (");
+	Serial.print(batt.level());
+	Serial.println("%)");
+  delay(1000);
 }
 
 // #########################################################################
@@ -500,7 +521,9 @@ void status(const char *msg) {
 void setupScreen() {
   tft.init();
   tft.setRotation(TFT_ROTATION);
+  Serial.println("About to calibrate");
   touchCalibrate();
+  Serial.println("Done calibrating");
   tft.fillScreen(TFT_BLACK);
   setupMenuButtons();
   drawMenu();
@@ -530,7 +553,7 @@ void doJog(u_int16_t steps) {
   position += dirMult * steps;
   position = max(0, (int)position);
   position = min(26400, (int)position);
-  status(itoa(position, "", 10));
+  //status(itoa(position, "", 10));
 }
 
 void jogToPosition(uint16_t target) {
