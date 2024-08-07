@@ -14,7 +14,7 @@ static Button touch(0, buttonHandler);
 #include <TFT_eSPI.h>      // Hardware-specific library
 #include "Free_Fonts.h" 
 #define CALIBRATION_FILE "/TouchCalData2"
-#define REPEAT_CAL true
+#define REPEAT_CAL false
 #define TFT_ROTATION 3 //0-3
 #define KEY_X 280 // Centre of key
 #define KEY_Y 96
@@ -59,6 +59,7 @@ void drawKeypad();
 void drawControls();
 void drawMenu(int, bool);
 void status(const char*);
+void battery();
 
 // Ring meter
 #define DARKER_GREY 0x0 //0x18E3
@@ -68,8 +69,8 @@ bool initMeter = true;
 // Stepper (TMC2208)
 #define DIR_PIN   2    // Direction
 #define STEP_PIN  4     // Step
-#define ENDWARD true
-#define MOTORWARD false
+#define ENDWARD false
+#define MOTORWARD !ENDWARD
 #define STEPS_PER_MM 320  // with m12 on 00, it's 160 steps per 0.5 mm, 320 steps per 1 mm, or 32 steps per 0.1 mm = 1 dmm
 int dirMult = 0;
 int16_t position = 0;
@@ -120,9 +121,9 @@ Battery batt = Battery(9900, 12300, SENSE_PIN);
 void setup() {
   Serial.begin(115200);
   Serial.println("Setup Start");
-  //setupScreen();
+  setupScreen();
   
-  //delay(1000);
+  delay(1000);
   pinMode(PIEZO_PIN, OUTPUT);
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
@@ -131,28 +132,20 @@ void setup() {
   digitalWrite(STEP_PIN, LOW);
   digitalWrite(DIR_PIN, MOTORWARD);
   dirMult = digitalRead(DIR_PIN) ? 1 : -1;
-  // doJog(20000);
-  // position=0;
-  // char temp[10];
-  // status(itoa(position, temp, 10));
-  // setupDosage();
+  //doJog(20000);
+  position=0;
+  char temp[10];
+  status(itoa(position, temp, 10));
+  //setupDosage();
   batt.begin(3300, 3.88); //3.3 v adc = 3300, resistor ratio (22k + 6.8k + 10k) / 10k = 2.88 
   Serial.println("Setup Done");
 }
 
 void loop(void) {
-  // if (tft.getTouchRawZ() > 100) { bool pressed = tft.getTouch(&t_x, &t_y); touch.update((uint8)pressed);} 
-  // if (startTime) administerDose(); // lock-in on just administering dose, quit doing slow touchscreen reads
-  // else delay(5);
-  Serial.print("    ADC is ");
-  Serial.print(analogRead(SENSE_PIN));
-  Serial.print("            ");
-  Serial.print("Battery voltage is ");
-	Serial.print(batt.voltage());
-	Serial.print(" (");
-	Serial.print(batt.level());
-	Serial.println("%)");
-  delay(1000);
+  if (tft.getTouchRawZ() > 100) { bool pressed = tft.getTouch(&t_x, &t_y); touch.update((uint8)pressed);} 
+  if (startTime) administerDose(); // lock-in on just administering dose, quit doing slow touchscreen reads
+  else delay(5);
+  battery();
 }
 
 // #########################################################################
@@ -206,6 +199,7 @@ void ringMeter(int x, int y, int r, int val)
 }
 
 void administerDose() {
+  Serial.println("Administering Dose");
   micros_t now;
   char buffer[50];
   char timeString[10];
@@ -221,6 +215,7 @@ void administerDose() {
     if (currentSteps % 10 == 0) {
       int progress = currentSteps * 100 / steps[phase];
       ringMeter(480*3/4, 320*3/5, 480/6, progress); // Draw analogue meter
+      battery();
     }
     if (nextStepTime <= now) {
       doStep();
@@ -434,7 +429,9 @@ void setupDosage(/*int syringeSize*/) {
   delay_us[1] = steadyDelay_us;
   delay_us[2] = steadyDelay_us; //transition continues to use steadyDelay
   delay_us[3] = salineDelay_us;
+  Serial.println("Dosage jog start");
   jogToPosition((plungerDose_mL+plungerOffset_mL) * steps_per_mL);
+  Serial.println("Dosage jog done");
 }
 
 void setupMenuButtons() {
@@ -507,6 +504,19 @@ void touchCalibrate() {
   }
 }
 
+void battery() {
+  tft.setTextPadding(30);
+  tft.setCursor(STATUS_X, 4);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextFont(STATUS_FONT);
+  tft.setTextDatum(TC_DATUM);
+  tft.setTextSize(1);
+  char buffer[20]; 
+  sprintf(buffer, "Battery: %d%%", batt.level());
+  tft.drawString(buffer, STATUS_X, 4);
+  tft.setTextPadding(0);
+}
+
 void status(const char *msg) {
   tft.setTextPadding(240);
   tft.setCursor(STATUS_X, STATUS_Y);
@@ -548,7 +558,7 @@ void doJog(u_int16_t steps) {
     delayMicroseconds(50);
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(50);
-    if (steps % 5000 == 0) yield();
+    if (i % 10000 == 0) yield();
   }
   position += dirMult * steps;
   position = max(0, (int)position);
