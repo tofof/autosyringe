@@ -132,11 +132,11 @@ void setup() {
   digitalWrite(STEP_PIN, LOW);
   digitalWrite(DIR_PIN, MOTORWARD);
   dirMult = digitalRead(DIR_PIN) ? 1 : -1;
-  //doJog(20000);
+  doJog(20000);
   position=0;
   char temp[10];
   status(itoa(position, temp, 10));
-  //setupDosage();
+  setupDosage();
   batt.begin(3300, 3.88); //3.3 v adc = 3300, resistor ratio (22k + 6.8k + 10k) / 10k = 2.88 
   Serial.println("Setup Done");
 }
