@@ -69,7 +69,7 @@ bool initMeter = true;
 // Stepper (TMC2208)
 #define DIR_PIN   2    // Direction
 #define STEP_PIN  4     // Step
-#define ENDWARD false
+#define ENDWARD true
 #define MOTORWARD !ENDWARD
 #define STEPS_PER_MM 320  // with m12 on 00, it's 160 steps per 0.5 mm, 320 steps per 1 mm, or 32 steps per 0.1 mm = 1 dmm
 int dirMult = 0;
