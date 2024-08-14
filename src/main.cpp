@@ -90,11 +90,11 @@ void syringeChange();
 const float mm_per_mL[21]={ 0, 0, 0,16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int steps_per_mL = STEPS_PER_MM * mm_per_mL[3];
 int plungerOffset_mL = 0.2; //offset because zero position would require plunger to be inserted more than 100% into syringe
-float initialDose_mL = 1.1;
+float initialDose_mL = 1.7;
 int initialSteps = initialDose_mL * steps_per_mL;
 int initialTime_sec = 30;
 int initialDelay_us = initialTime_sec * 1e6 / initialSteps;
-float totalDose_mL = 2.5;
+float totalDose_mL = 3.0;
 float plungerDose_mL = totalDose_mL - 0.5;
 float steadyDose_mL = plungerDose_mL - initialDose_mL; //infusion dose from first syringe
 int steadySteps = steadyDose_mL * steps_per_mL;
