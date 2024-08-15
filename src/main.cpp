@@ -250,6 +250,19 @@ void administerDose() {
     startTime = micros();
     nextStepTime = startTime + steps[phase]; 
   }
+  if (phase==4) {   // beep done
+    digitalWrite(PIEZO_PIN, HIGH);
+    delay(200);
+    digitalWrite(PIEZO_PIN, LOW);
+    delay(200);
+    digitalWrite(PIEZO_PIN, HIGH);
+    delay(200);
+    digitalWrite(PIEZO_PIN, LOW);
+    delay(200);
+    digitalWrite(PIEZO_PIN, HIGH);
+    delay(200);
+    digitalWrite(PIEZO_PIN, LOW);
+  }
 } 
 
 void syringeChange() {
