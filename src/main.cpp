@@ -98,13 +98,13 @@ float totalDose_mL = 3.0;
 float plungerDose_mL = totalDose_mL - 0.5;
 float steadyDose_mL = plungerDose_mL - initialDose_mL; //infusion dose from first syringe
 int steadySteps = steadyDose_mL * steps_per_mL;
-int steadyTime_sec = 60; // time per 0.1 mL
+int steadyTime_sec = 40; // time per 0.1 mL
 int steadyDelay_us = steadyTime_sec * 1e6 / (0.1 * steps_per_mL);
 float transitionDose_mL = 0.5; //infusion dose in butterfly, administered by second syringe
 int transitionSteps = transitionDose_mL * steps_per_mL;
-float salineFlush_mL = 2.0;
+float salineFlush_mL = 1.5;
 int salineSteps = salineFlush_mL * steps_per_mL - transitionSteps; //portion of second syringe that is just saline
-int salineTime_sec = 20; // time per 0.1 mL after the first 0.5 mL of saline (which is really the last 0.5 of dose)
+int salineTime_sec = 12; // time per 0.1 mL after the first 0.5 mL of saline (which is really the last 0.5 of dose)
 int salineDelay_us = salineTime_sec * 1e6 / (0.1 * steps_per_mL);
 int steps[4] = {initialSteps, steadySteps, transitionSteps, salineSteps};
 int delay_us[4] = {initialDelay_us, steadyDelay_us, steadyDelay_us, salineDelay_us}; // transitionDelay is steadyDelay
@@ -279,7 +279,15 @@ void syringeChange() {
     tft.setFreeFont(FSSB12);
     controls[4].initButton(&tft, 500, 500, 1, 1, TFT_WHITE, TFT_BLUE, TFT_WHITE, "Start", 1);  //disable start
     retract.drawButton();
-    delay(1000);
+    delay(200);
+    digitalWrite(PIEZO_PIN, LOW);
+    delay(200);
+    digitalWrite(PIEZO_PIN, HIGH);
+    delay(200);
+    digitalWrite(PIEZO_PIN, LOW);
+    delay(200);
+    digitalWrite(PIEZO_PIN, HIGH);
+    delay(200);
     digitalWrite(PIEZO_PIN, LOW);
 }
 
