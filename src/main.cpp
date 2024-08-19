@@ -642,6 +642,7 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
       if (retract.justPressed()) {
         jogToPosition(salineFlush_mL * steps_per_mL);
         tft.fillRect(241, 0, 240, 320, TFT_BLACK);
+        delay(5000);
         drawControls();
       }
     }
