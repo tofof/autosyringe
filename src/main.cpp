@@ -254,16 +254,14 @@ void administerDose() {
   }
   if (phase==4) {   // beep done
     digitalWrite(PIEZO_PIN, HIGH);
-    delay(200);
+    delay(2000);
     digitalWrite(PIEZO_PIN, LOW);
-    delay(200);
-    digitalWrite(PIEZO_PIN, HIGH);
-    delay(200);
-    digitalWrite(PIEZO_PIN, LOW);
-    delay(200);
-    digitalWrite(PIEZO_PIN, HIGH);
-    delay(200);
-    digitalWrite(PIEZO_PIN, LOW);
+    
+    tft.fillRect(0, 0, 480, 320, TFT_BLACK); // blank screen
+    tft.setFreeFont(FSSB24);
+    tft.setTextDatum(TC_DATUM);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString("Dose Finished", 240, 140, GFXFF);
   }
 } 
 
