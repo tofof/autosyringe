@@ -90,10 +90,10 @@ void syringeChange();
 const float mm_per_mL[21]={ 0, 0, 0,16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int steps_per_mL = STEPS_PER_MM * mm_per_mL[3];
 int plungerOffset_mL = 0.2; //offset because zero position would require plunger to be inserted more than 100% into syringe
-float initialDose_mL = 1.7;
+float initialDose_mL = 1.6;
 int initialSteps = initialDose_mL * steps_per_mL;
-int initialTime_sec = 30;
-int initialDelay_us = initialTime_sec * 1e6 / initialSteps;
+int initialTime_sec = 3;
+int initialDelay_us = initialTime_sec * 1e6 / (0.1 * steps_per_mL);
 float totalDose_mL = 3.0;
 float plungerDose_mL = totalDose_mL - 0.5;
 float steadyDose_mL = plungerDose_mL - initialDose_mL; //infusion dose from first syringe
@@ -142,7 +142,9 @@ void setup() {
 }
 
 void loop(void) {
-  if (tft.getTouchRawZ() > 100) { bool pressed = tft.getTouch(&t_x, &t_y); touch.update((uint8)pressed);} 
+  //if (tft.getTouchRawZ() > 100) { bool pressed = tft.getTouch(&t_x, &t_y); touch.update((uint8)pressed);} 
+  bool pressed = tft.getTouch(&t_x, &t_y);
+  touch.update((uint8)pressed);
   if (startTime) administerDose(); // lock-in on just administering dose, quit doing slow touchscreen reads
   else delay(5);
   battery();
@@ -333,8 +335,12 @@ void drawMenu(int row=-1, bool invert=false) {
     if (row==1 && invert) tft.setTextColor(TFT_BLACK, TFT_LIGHTGREY);
     tft.setFreeFont(MENU1_FONT);
     tft.setTextDatum(BL_DATUM);
-    tft.drawString("Initial Time", 4, y-11, GFXFF);
+    tft.drawString("Initial Rate", 4, y-18, GFXFF);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextFont(GLCD);
+    tft.drawString("per 0.1 mL", 4, y-17, GFXFF);
     tft.setTextDatum(BR_DATUM);
+    tft.setFreeFont(MENU1_FONT);
     tft.drawNumber(initialTime_sec, 210, y-11, GFXFF);
     tft.drawString("sec", 235, y-13, FONT2);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -435,7 +441,7 @@ void drawKeypad() {
 void setupDosage(/*int syringeSize*/) {
   /*steps_per_mL = STEPS_PER_MM * mm_per_mL[syringeSize];*/
   initialSteps = initialDose_mL * steps_per_mL;
-  initialDelay_us = initialTime_sec * 1e6 / initialSteps;
+  initialDelay_us = initialTime_sec * 1e6 / (0.1 * steps_per_mL);
   plungerDose_mL = totalDose_mL - 0.5;
   steadyDose_mL = plungerDose_mL - initialDose_mL;
   steadySteps = steadyDose_mL * steps_per_mL;
@@ -570,7 +576,10 @@ void doStep() {
   delayMicroseconds(50);
   digitalWrite(STEP_PIN, LOW);
   delayMicroseconds(50);
+  dirMult = digitalRead(DIR_PIN) ? 1 : -1;
   position += dirMult;
+  position = max(0, (int)position);
+  position = min(26400, (int)position);
 }
 
 void doJog(u_int16_t steps) {
@@ -642,6 +651,7 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
       if (retract.justPressed()) {
         jogToPosition(salineFlush_mL * steps_per_mL);
         tft.fillRect(241, 0, 240, 320, TFT_BLACK);
+        retract.initButton(&tft, 500, 500, 110, 36, TFT_WHITE, TFT_GOLD, TFT_WHITE, "Retract", 1); //disable retract
         delay(5000);
         drawControls();
       }
