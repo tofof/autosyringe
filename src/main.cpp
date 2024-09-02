@@ -90,9 +90,9 @@ void syringeChange();
 const float mm_per_mL[21]={ 0, 0, 0,16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int steps_per_mL = STEPS_PER_MM * mm_per_mL[3];
 int plungerOffset_mL = 0.2; //offset because zero position would require plunger to be inserted more than 100% into syringe
-float initialDose_mL = 1.4;
+float initialDose_mL = 1.3;
 int initialSteps = initialDose_mL * steps_per_mL;
-int initialTime_sec = 3;
+int initialTime_sec = 4;
 int initialDelay_us = initialTime_sec * 1e6 / (0.1 * steps_per_mL);
 float totalDose_mL = 2.8;
 float plungerDose_mL = totalDose_mL - 0.5;
@@ -647,7 +647,11 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
         retract.press(false); 
       }
       if (retract.justPressed()) {
-        jogToPosition(salineFlush_mL * steps_per_mL);
+        digitalWrite(DIR_PIN, MOTORWARD);
+        dirMult = digitalRead(DIR_PIN) ? 1 : -1;
+        doJog(1000);
+        position = 0;
+        jogToPosition((salineFlush_mL+plungerOffset_mL) * steps_per_mL);
         tft.fillRect(241, 0, 240, 320, TFT_BLACK);
         retract.initButton(&tft, 500, 500, 110, 36, TFT_WHITE, TFT_GOLD, TFT_WHITE, "Retract", 1); //disable retract
         delay(5000);
@@ -670,7 +674,7 @@ static void buttonHandler(uint8_t btnId, uint8_t pressed) {
       if (controls[b].justPressed()) {
         controls[b].drawButton(true);   // draw invert
         if (b<4) {
-          digitalWrite(DIR_PIN, b < 2 ? ENDWARD : MOTORWARD);
+          digitalWrite(DIR_PIN, b < 2 ? MOTORWARD : ENDWARD);
           dirMult = digitalRead(DIR_PIN) ? 1 : -1;
         }
         if (b==4) {
